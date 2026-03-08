@@ -1,0 +1,113 @@
+/**
+ * PostCard - 近く画面のホットカード（横スクロール用）
+ * mock.jsx: ボトムシート内の横スクロールカード
+ */
+import React from 'react';
+import { TouchableOpacity, View, Text, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { Post } from '../../types';
+import { getCategoryInfo, getCategoryIconName } from '../../constants/categories';
+import { formatDistance } from '../../lib/utils';
+import { Colors } from '../../constants/colors';
+
+type Props = {
+  post: Post;
+  isSelected?: boolean;
+  onPress: (post: Post) => void;
+};
+
+export default function PostCard({ post, isSelected, onPress }: Props) {
+  const cat = getCategoryInfo(post.category);
+  const iconName = getCategoryIconName(post.category) as keyof typeof Ionicons.glyphMap;
+
+  return (
+    <TouchableOpacity
+      style={[styles.card, isSelected && styles.cardSelected, { borderColor: isSelected ? cat.color : Colors.border }]}
+      onPress={() => onPress(post)}
+      activeOpacity={0.8}
+    >
+      {/* カテゴリアイコン + バッジ */}
+      <View style={styles.header}>
+        <View style={[styles.categoryIconBox, { backgroundColor: cat.color }]}>
+          <Ionicons name={iconName} size={13} color="#fff" />
+        </View>
+        {post.urgency === 'high' && <Text style={styles.urgencyBadge}>急</Text>}
+        {post.author.verified && <Ionicons name="checkmark-circle" size={14} color="#3B82F6" />}
+      </View>
+
+      <Text style={styles.title} numberOfLines={2}>{post.title}</Text>
+
+      <View style={styles.placeRow}>
+        <Ionicons name="location-outline" size={10} color={Colors.textSecondary} />
+        <Text style={styles.placeName} numberOfLines={1}>{post.place.name}</Text>
+      </View>
+
+      <View style={styles.footer}>
+        <Text style={[styles.distance, { color: cat.color }]}>{formatDistance(post.distance)}</Text>
+        <Text style={styles.time}>{post.createdAt}</Text>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+const styles = StyleSheet.create({
+  card: {
+    width: 160,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 2,
+    backgroundColor: '#fff',
+  },
+  cardSelected: {
+    // borderColor set dynamically
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 8,
+  },
+  categoryIconBox: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  urgencyBadge: {
+    fontSize: 10,
+    color: '#EF4444',
+    fontWeight: '700',
+  },
+  title: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    marginBottom: 6,
+  },
+  placeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    marginBottom: 4,
+  },
+  placeName: {
+    fontSize: 10,
+    color: Colors.textSecondary,
+    flex: 1,
+  },
+  footer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 2,
+  },
+  distance: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  time: {
+    fontSize: 10,
+    color: Colors.textMuted,
+  },
+});
