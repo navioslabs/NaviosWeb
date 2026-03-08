@@ -39,6 +39,7 @@ export const MOCK_POSTS: Post[] = [
     allowComments: true,
     isEnded: false,
     commentCount: 6,
+    likeCount: 14,
   },
   {
     id: '2',
@@ -54,6 +55,7 @@ export const MOCK_POSTS: Post[] = [
     allowComments: true,
     isEnded: false,
     commentCount: 3,
+    likeCount: 28,
   },
   {
     id: '3',
@@ -70,6 +72,7 @@ export const MOCK_POSTS: Post[] = [
     allowComments: true,
     isEnded: false,
     commentCount: 6,
+    likeCount: 9,
   },
   {
     id: '4',
@@ -86,6 +89,7 @@ export const MOCK_POSTS: Post[] = [
     allowComments: true,
     isEnded: false,
     commentCount: 2,
+    likeCount: 5,
   },
   {
     id: '5',
@@ -101,6 +105,7 @@ export const MOCK_POSTS: Post[] = [
     allowComments: true,
     isEnded: false,
     commentCount: 1,
+    likeCount: 3,
   },
   {
     id: '6',
@@ -116,6 +121,7 @@ export const MOCK_POSTS: Post[] = [
     allowComments: true,
     isEnded: false,
     commentCount: 4,
+    likeCount: 21,
   },
   {
     id: '7',
@@ -131,6 +137,7 @@ export const MOCK_POSTS: Post[] = [
     allowComments: true,
     isEnded: false,
     commentCount: 5,
+    likeCount: 32,
   },
   {
     id: '8',
@@ -146,6 +153,7 @@ export const MOCK_POSTS: Post[] = [
     allowComments: true,
     isEnded: false,
     commentCount: 2,
+    likeCount: 7,
   },
 ];
 

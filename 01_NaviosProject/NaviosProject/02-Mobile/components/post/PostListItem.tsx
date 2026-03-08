@@ -7,7 +7,7 @@ import { TouchableOpacity, View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Post } from '../../types';
 import { getCategoryInfo, getCategoryIconName } from '../../constants/categories';
-import { formatDistance } from '../../lib/utils';
+import { formatDistance, getExpiryLabel } from '../../lib/utils';
 import { Colors } from '../../constants/colors';
 
 type Props = {
@@ -18,6 +18,7 @@ type Props = {
 
 export default function PostListItem({ post, onPress, showMatchScore }: Props) {
   const cat = getCategoryInfo(post.category);
+  const expiryLabel = getExpiryLabel(post);
 
   return (
     <TouchableOpacity style={styles.container} onPress={() => onPress(post)} activeOpacity={0.7}>
@@ -45,6 +46,13 @@ export default function PostListItem({ post, onPress, showMatchScore }: Props) {
           <Text style={styles.metaText}>{post.author.displayName}</Text>
           <Text style={styles.dot}>·</Text>
           <Text style={styles.metaText}>{post.createdAt}</Text>
+          {expiryLabel && (
+            <>
+              <Text style={styles.dot}>·</Text>
+              <Ionicons name="time-outline" size={10} color={cat.color} />
+              <Text style={[styles.metaText, { color: cat.color, fontWeight: '600' }]}>{expiryLabel}</Text>
+            </>
+          )}
         </View>
       </View>
 

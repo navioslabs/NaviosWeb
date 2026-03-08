@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { Post } from '../../types';
 import { calcMatchScore } from '../../lib/utils';
 import PostListItem from '../../components/post/PostListItem';
@@ -25,12 +26,6 @@ import { Colors } from '../../constants/colors';
 import { MOCK_POSTS } from '../../lib/mockData';
 
 const QUICK_TAGS = ['野菜', '卵', '手伝い', 'イベント', '給付金'];
-
-/** PulseScreen の Props */
-type Props = {
-  /** 投稿カードタップ時のコールバック */
-  onPostPress: (post: Post) => void;
-};
 
 /**
  * 中央アイコンのパルスアニメーションを管理するフック
@@ -64,7 +59,8 @@ function usePulseAnimation() {
  * Pulse（ホーム）画面
  * NaviOs AI へのキーワード検索と投稿マッチング結果を表示する
  */
-export default function PulseScreen({ onPostPress }: Props) {
+export default function PulseScreen() {
+  const router = useRouter();
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<(Post & { matchScore: number })[]>([]);
@@ -167,7 +163,7 @@ export default function PulseScreen({ onPostPress }: Props) {
           renderItem={({ item }) => (
             <PostListItem
               post={item}
-              onPress={onPostPress}
+              onPress={(post) => router.push(`/post/${post.id}`)}
               showMatchScore={item.matchScore}
             />
           )}

@@ -221,41 +221,62 @@ dev/
 
 ---
 
-## 進捗サマリー（2026-03-08）
+## 進捗サマリー（2026-03-09）
 
-### 実施済み
+### Phase 1 UI 実装状況
 
-- 指定ソース（mobile/, mock.jsx, CLAUDE.md, Navios-MVP-Phase1）を確認し、/home/zer0/dev/NaviOs を新規作成。
-- mobile/ をベースに、node_modules と .git を除外して NaviOs/ へコピー。
-- 予定構成に合わせて画面ファイルを再配置。
-  - app/tabs/PulseScreen.tsx -> app/(tabs)/index.tsx
-  - app/tabs/NearbyScreen.tsx -> app/(tabs)/nearby.tsx
-  - app/tabs/SearchScreen.tsx -> app/(tabs)/search.tsx
-  - app/tabs/ProfileScreen.tsx -> app/(tabs)/profile.tsx
-  - app/post/DetailScreen.tsx -> app/post/[id].tsx
-- 不足していた予定ファイルを追加。
-  - app/post/create.tsx
-  - app/auth/login.tsx
-  - app/auth/register.tsx
-  - lib/supabase.ts
-  - lib/auth.ts
-  - hooks/useAuth.ts
-  - hooks/usePosts.ts
-  - hooks/useLocation.ts
-- App.tsx の import 参照を新パスへ更新。
-- ドキュメントを NaviOs/docs/ に集約。
-  - docs/Navios-MVP-Phase1
-  - docs/CLAUDE.md
-  - docs/mock.jsx
+| 画面・機能 | 状態 |
+|---|---|
+| Pulse（ホーム）画面 | ✅ 完成 |
+| Nearby（地図・ボトムシート）画面 | ✅ 完成 |
+| 検索画面（キーワード検索・トレンド遷移） | ✅ 完成 |
+| マイページ | ✅ 完成 |
+| 投稿詳細（いいね・シェア・コメント） | ✅ 完成 |
+| 投稿作成フォーム（カテゴリ別） | ✅ 完成 |
+| ログイン画面 UI | ✅ 完成（Supabase接続はPhase2） |
+| 新規登録画面 UI | ✅ 完成（Supabase接続はPhase2） |
+| BottomTabBar | ✅ 完成 |
+| CategoryFilter（アイコン付き） | ✅ 完成 |
+| PostCard（残り時間・カテゴリアイコン） | ✅ 完成 |
+| PostListItem（残り時間・カテゴリアイコン） | ✅ 完成 |
+| **Expo Router 移行** | ✅ 完成 |
+
+### ルーティングアーキテクチャ（現状）
+
+Expo Router v5 のファイルベースルーティングに完全移行済み。
+
+```
+app/
+├── _layout.tsx          ← Root: SafeAreaProvider + StatusBar + Stack
+├── (tabs)/
+│   ├── _layout.tsx      ← Tabs: カスタムタブバー（中央投稿ボタン付き）
+│   ├── index.tsx        ← Pulse画面
+│   ├── nearby.tsx       ← 近く画面（地図）
+│   ├── search.tsx       ← 検索画面
+│   └── profile.tsx      ← マイページ
+├── post/
+│   ├── [id].tsx         ← 投稿詳細（useLocalSearchParams でID取得）
+│   └── create.tsx       ← 投稿作成（modal）
+└── auth/
+    ├── login.tsx
+    └── register.tsx
+```
+
+- 全画面でナビゲーション Props を廃止 → `useRouter()` / `useLocalSearchParams()` を使用
+- `App.tsx` / `BottomTabBar.tsx` は死コード（削除可）
 
 ### 現在の状態
 
-- NaviOs/ は、指定の予定ディレクトリ構成に沿う形で整理済み。
-- 既存の mobile/ は保全（未削除）。
-- 画面遷移は現状 App.tsx ベースのため、Expo Router の完全移行（app/_layout.tsx 等）は未実施。
+- **Phase 1 UI + Expo Router 移行はすべて実装完了**
+- データはすべて `lib/mockData.ts` のモック（Supabase 接続は Phase 2）
+- 地図は MapLibre プレースホルダー（実地図表示は Phase 2）
+- 起動前に `npx expo install expo-router` が必要
 
-### 次フェーズ候補
+### 次フェーズ候補（Phase 2）
 
-- App.tsx 依存の遷移ロジックを Expo Router の _layout.tsx + Stack/Tabs へ置換。
-- post/create と auth/* のプレースホルダーを実機能へ実装。
-- lib/mockData.ts 依存を段階的に Supabase API + hooks に置換。
+- MapLibre GL による実地図表示（現在はプレースホルダー）
+- `app/auth/` を Supabase Auth 実装に接続
+- `lib/mockData.ts` 依存を `hooks/usePosts.ts` + Supabase API へ段階移行
+- `hooks/useLocation.ts` の実装（expo-location）
+- プッシュ通知（Phase 2）
+- Claude API 連携 Pulse 検索（Phase 2）

@@ -51,7 +51,7 @@ export default function App() {
         <View style={styles.content}>
           {view === 'pulse' && <PulseScreen onPostPress={handlePostPress} />}
           {view === 'nearby' && <NearbyScreen onPostPress={handlePostPress} />}
-          {view === 'search' && <SearchScreen onCategorySelect={handleCategorySelect} />}
+          {view === 'search' && <SearchScreen onCategorySelect={handleCategorySelect} onPostPress={handlePostPress} />}
           {view === 'profile' && <ProfileScreen />}
           {view === 'detail' && selectedPost && (
             <DetailScreen post={selectedPost} onBack={() => setView(activeTab)} />

@@ -16,16 +16,27 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { CategoryId, getCategoryInfo, getCategoryIconName } from '../../constants/categories';
+import { Post } from '../../types';
 import CategoryFilter from '../../components/common/CategoryFilter';
 import PostCard from '../../components/post/PostCard';
 import PostListItem from '../../components/post/PostListItem';
-import { Post } from '../../types';
 import { Colors } from '../../constants/colors';
 import { MOCK_POSTS } from '../../lib/mockData';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 type SheetState = 'closed' | 'half' | 'full';
+
+/** ボトムシートの最大高さ */
+const MAX_SHEET_HEIGHT = SCREEN_HEIGHT * 0.62;
+
+/** 各状態で translateY する量（sheet 高さ - 表示したい高さ） */
+const SHEET_TRANSLATE: Record<SheetState, number> = {
+  closed: MAX_SHEET_HEIGHT - 70,
+  half:   MAX_SHEET_HEIGHT - 220,
+  full:   0,
+};
 
 /** mock.jsx の pinPositions と同じ配置 */
 const PIN_POSITIONS = [
@@ -39,15 +50,16 @@ const PIN_POSITIONS = [
   { top: '38%', left: '30%' },
 ] as const;
 
-type Props = {
-  onPostPress: (post: Post) => void;
-};
-
-export default function NearbyScreen({ onPostPress }: Props) {
-  const [activeCategory, setActiveCategory] = useState<CategoryId | 'all'>('all');
+export default function NearbyScreen() {
+  const router = useRouter();
+  const { category: initialCategory } = useLocalSearchParams<{ category?: string }>();
+  const [activeCategory, setActiveCategory] = useState<CategoryId | 'all'>(
+    (initialCategory as CategoryId) ?? 'all'
+  );
   const [sheetState, setSheetState] = useState<SheetState>('half');
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
 
+  // ─── ロゴ点滅アニメーション ───────────────────────────
   const dotOpacity = useRef(new Animated.Value(1)).current;
   useEffect(() => {
     const blink = Animated.loop(
@@ -60,10 +72,50 @@ export default function NearbyScreen({ onPostPress }: Props) {
     return () => blink.stop();
   }, [dotOpacity]);
 
+  // ─── 現在地マーカーの ping アニメーション ────────────
+  const pingScale   = useRef(new Animated.Value(1)).current;
+  const pingOpacity = useRef(new Animated.Value(0.7)).current;
+  useEffect(() => {
+    const ping = Animated.loop(
+      Animated.sequence([
+        Animated.parallel([
+          Animated.timing(pingScale,   { toValue: 2.4, duration: 1400, useNativeDriver: true }),
+          Animated.timing(pingOpacity, { toValue: 0,   duration: 1400, useNativeDriver: true }),
+        ]),
+        Animated.parallel([
+          Animated.timing(pingScale,   { toValue: 1,   duration: 0, useNativeDriver: true }),
+          Animated.timing(pingOpacity, { toValue: 0.7, duration: 0, useNativeDriver: true }),
+        ]),
+      ])
+    );
+    ping.start();
+    return () => ping.stop();
+  }, [pingScale, pingOpacity]);
+
+  // ─── ボトムシートの translateY アニメーション ─────────
+  const sheetTranslateY = useRef(new Animated.Value(SHEET_TRANSLATE['half'])).current;
+
+  /** シートの状態変更 + アニメーション */
+  const animateSheet = (next: SheetState) => {
+    setSheetState(next);
+    Animated.timing(sheetTranslateY, {
+      toValue: SHEET_TRANSLATE[next],
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const cycleSheet = () => {
+    const next: SheetState =
+      sheetState === 'closed' ? 'half' : sheetState === 'half' ? 'full' : 'half';
+    animateSheet(next);
+  };
+
+  // ─── データ ─────────────────────────────────────────
   const filtered = activeCategory === 'all'
     ? MOCK_POSTS
     : MOCK_POSTS.filter((p) => p.category === activeCategory);
-  const sorted = [...filtered].sort((a, b) => a.distance - b.distance);
+  const sorted   = [...filtered].sort((a, b) => a.distance - b.distance);
   const hotPosts = sorted.slice(0, 3);
 
   const categoryCount = Object.fromEntries(
@@ -73,15 +125,6 @@ export default function NearbyScreen({ onPostPress }: Props) {
     ])
   ) as Record<CategoryId, number>;
 
-  const sheetHeight =
-    sheetState === 'full' ? SCREEN_HEIGHT * 0.62
-    : sheetState === 'half' ? 220
-    : 70;
-
-  const cycleSheet = () => {
-    setSheetState((s) => s === 'closed' ? 'half' : s === 'half' ? 'full' : 'half');
-  };
-
   return (
     <View style={styles.container}>
       {/* 地図エリア（プレースホルダー） */}
@@ -89,11 +132,22 @@ export default function NearbyScreen({ onPostPress }: Props) {
         <Text style={styles.mapText}>🗺️ 地図エリア</Text>
         <Text style={styles.mapSubText}>MapLibre を実装予定</Text>
 
+        {/* 現在地マーカー */}
+        <View style={styles.locationMarker}>
+          <Animated.View style={[
+            styles.locationPing,
+            { transform: [{ scale: pingScale }], opacity: pingOpacity },
+          ]} />
+          <View style={styles.locationDot}>
+            <Ionicons name="navigate" size={14} color="#fff" />
+          </View>
+        </View>
+
         {/* 投稿ピン */}
         {sorted.slice(0, PIN_POSITIONS.length).map((post, i) => {
-          const cat = getCategoryInfo(post.category);
+          const cat      = getCategoryInfo(post.category);
           const iconName = getCategoryIconName(post.category) as keyof typeof Ionicons.glyphMap;
-          const pos = PIN_POSITIONS[i];
+          const pos       = PIN_POSITIONS[i];
           const isSelected = selectedPost?.id === post.id;
           return (
             <TouchableOpacity
@@ -101,7 +155,7 @@ export default function NearbyScreen({ onPostPress }: Props) {
               style={[styles.pin, { top: pos.top, left: pos.left }]}
               onPress={() => {
                 setSelectedPost(post);
-                if (sheetState === 'closed') setSheetState('half');
+                if (sheetState === 'closed') animateSheet('half');
               }}
               activeOpacity={0.85}
             >
@@ -151,8 +205,8 @@ export default function NearbyScreen({ onPostPress }: Props) {
         />
       </SafeAreaView>
 
-      {/* ボトムシート */}
-      <View style={[styles.sheet, { height: sheetHeight }]}>
+      {/* ボトムシート（translateY アニメーション） */}
+      <Animated.View style={[styles.sheet, { transform: [{ translateY: sheetTranslateY }] }]}>
         {/* ハンドル */}
         <TouchableOpacity style={styles.handleArea} onPress={cycleSheet}>
           <View style={styles.handle} />
@@ -191,7 +245,7 @@ export default function NearbyScreen({ onPostPress }: Props) {
                       isSelected={selectedPost?.id === post.id}
                       onPress={(p) => {
                         setSelectedPost(p);
-                        onPostPress(p);
+                        router.push(`/post/${p.id}`);
                       }}
                     />
                   </View>
@@ -208,13 +262,13 @@ export default function NearbyScreen({ onPostPress }: Props) {
                 contentContainerStyle={styles.listContent}
                 ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
                 renderItem={({ item }) => (
-                  <PostListItem post={item} onPress={onPostPress} />
+                  <PostListItem post={item} onPress={(p) => router.push(`/post/${p.id}`)} />
                 )}
               />
             )}
           </View>
         )}
-      </View>
+      </Animated.View>
     </View>
   );
 }
@@ -223,12 +277,54 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  // ─── 地図 ─────────────────────────────────────────────
   mapPlaceholder: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: '#D1FAE5',
     alignItems: 'center',
     justifyContent: 'center',
   },
+  mapText: {
+    fontSize: 32,
+    marginBottom: 8,
+  },
+  mapSubText: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+  },
+  // ─── 現在地マーカー ────────────────────────────────────
+  locationMarker: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    marginTop: -16,
+    marginLeft: -16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  locationPing: {
+    position: 'absolute',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(59, 130, 246, 0.35)',
+  },
+  locationDot: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#3B82F6',
+    borderWidth: 3,
+    borderColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#3B82F6',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 6,
+    elevation: 6,
+  },
+  // ─── 投稿ピン ──────────────────────────────────────────
   pin: {
     position: 'absolute',
     marginLeft: -18,
@@ -271,14 +367,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '700',
   },
-  mapText: {
-    fontSize: 32,
-    marginBottom: 8,
-  },
-  mapSubText: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-  },
+  // ─── ヘッダー ──────────────────────────────────────────
   headerContainer: {
     position: 'absolute',
     top: 0,
@@ -359,11 +448,13 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '700',
   },
+  // ─── ボトムシート ──────────────────────────────────────
   sheet: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
+    height: MAX_SHEET_HEIGHT,
     backgroundColor: '#fff',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,

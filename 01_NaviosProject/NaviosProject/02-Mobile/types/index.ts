@@ -61,6 +61,7 @@ export type Post = {
   allowComments: boolean;
   isEnded: boolean;
   commentCount: number;
+  likeCount?: number;
   createdAt: string;
   expiresAt?: string;
 };

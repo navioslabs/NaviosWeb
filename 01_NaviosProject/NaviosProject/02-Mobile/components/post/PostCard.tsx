@@ -7,7 +7,7 @@ import { TouchableOpacity, View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Post } from '../../types';
 import { getCategoryInfo, getCategoryIconName } from '../../constants/categories';
-import { formatDistance } from '../../lib/utils';
+import { formatDistance, getExpiryLabel } from '../../lib/utils';
 import { Colors } from '../../constants/colors';
 
 type Props = {
@@ -19,6 +19,7 @@ type Props = {
 export default function PostCard({ post, isSelected, onPress }: Props) {
   const cat = getCategoryInfo(post.category);
   const iconName = getCategoryIconName(post.category) as keyof typeof Ionicons.glyphMap;
+  const expiryLabel = getExpiryLabel(post);
 
   return (
     <TouchableOpacity
@@ -36,6 +37,13 @@ export default function PostCard({ post, isSelected, onPress }: Props) {
       </View>
 
       <Text style={styles.title} numberOfLines={2}>{post.title}</Text>
+
+      {expiryLabel && (
+        <View style={styles.expiryRow}>
+          <Ionicons name="time-outline" size={10} color={cat.color} />
+          <Text style={[styles.expiryText, { color: cat.color }]}>{expiryLabel}</Text>
+        </View>
+      )}
 
       <View style={styles.placeRow}>
         <Ionicons name="location-outline" size={10} color={Colors.textSecondary} />
@@ -109,5 +117,15 @@ const styles = StyleSheet.create({
   time: {
     fontSize: 10,
     color: Colors.textMuted,
+  },
+  expiryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    marginBottom: 4,
+  },
+  expiryText: {
+    fontSize: 10,
+    fontWeight: '600',
   },
 });

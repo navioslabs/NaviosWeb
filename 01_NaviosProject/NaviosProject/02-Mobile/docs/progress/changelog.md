@@ -1,29 +1,107 @@
 # Changelog
 
-最終更新: 2026-03-08
+最終更新: 2026-03-09
 
-## 2026-03-08 Chat 1
+## 2026-03-09 — Expo Router 完全移行
 
-- 対象ファイルとディレクトリを調査
-- NaviOs/ を新規作成し、予定構成に合わせて仕分け
-- app/tabs/* を app/(tabs)/* へ移動
-- app/post/DetailScreen.tsx を app/post/[id].tsx へ移動
-- auth / hooks / lib の不足ファイルを追加
-- docs/ に CLAUDE.md / mock.jsx / Navios-MVP-Phase1 を集約
+### 設定ファイル
+- `package.json`: `main` を `"expo-router/entry"` に変更、依存に `"expo-router": "~5.0.0"` 追加
+- `app.json`: `scheme: "navios"`, `plugins: ["expo-router"]`, `web: { bundler: "metro" }` 追加
 
-## 2026-03-08 Chat 2
+### ルートレイアウト新設 (`app/_layout.tsx`)
+- `SafeAreaProvider` + `StatusBar` でラップ
+- `Stack` に5画面を宣言:
+  - `(tabs)`: `headerShown: false`
+  - `post/[id]`: `slide_from_right` アニメーション
+  - `post/create`: `modal` プレゼンテーション
+  - `auth/login` / `auth/register`: `headerShown: false`
 
-- CLAUDE.md に進捗をまとめて追記
-- NaviOs/docs/CLAUDE.md に同期
+### タブレイアウト新設 (`app/(tabs)/_layout.tsx`)
+- カスタム `tabBar` でボトムタブバーを描画
+  - 左2タブ（Pulse・近く）/ 中央投稿ボタン / 右2タブ（検索・マイページ）の5分割
+  - 中央ボタン: `router.push('/post/create')`
+  - `TAB_ITEMS` 定数 + `TabButton` コンポーネントで管理
 
-## 2026-03-08 Chat 3
+### 全画面: ナビゲーション Props 削除 → `useRouter()` 置換
+- `app/(tabs)/index.tsx`: `onPostPress` prop を削除、`router.push('/post/${post.id}')`
+- `app/(tabs)/nearby.tsx`: `onPostPress` 削除、`useLocalSearchParams()` でカテゴリ初期値受け取り
+- `app/(tabs)/search.tsx`: `onPostPress`/`onCategorySelect` 削除、`router.push()` に統一
+- `app/post/[id].tsx`: `post: Post`/`onBack` 削除 → `useLocalSearchParams({ id })` + `MOCK_POSTS.find()`
+- `app/post/create.tsx`: `onClose` 削除 → `router.back()`
+- `app/auth/login.tsx`: `onGoRegister`/`onLoginSuccess` → `router.push('/auth/register')` / `router.replace('/(tabs)')`
+- `app/auth/register.tsx`: `onGoLogin`/`onRegisterSuccess` → `router.back()` / `router.replace('/(tabs)')`
 
-- ユーザー指示により /home/zer0/dev/mobile を削除
+### 不要になったファイル
+- `App.tsx`: 画面ルーティングの中央管理が不要に（削除可）
+- `BottomTabBar.tsx`: `_layout.tsx` 内の `CustomTabBar` に統合（削除可）
 
-## 2026-03-08 Chat 4
+### 次回起動前に必要な作業
+```bash
+cd Mobile
+npx expo install expo-router
+```
 
-- docs/progress/ を作成
-- progress.md と changelog.md を作成し、これまでの作業と残タスクを整理
+---
+
+## 2026-03-09 — Phase 1 UI 完成
+
+### アイコン・UI修正
+- Pulse 検索ボタン: `sparkles` → `search`（mock.jsx 準拠）
+- 近助カテゴリアイコン: `people-outline` → `hand-left-outline`
+- CategoryFilter: 各チップにカテゴリアイコン追加（getCategoryIconName 使用）
+- PostCard: カテゴリドット → アイコン付き角丸ボックス（categoryIconBox）
+- PostListItem: カテゴリアイコン追加
+
+### Nearby 画面 UI改善
+- ボトムシートアニメーション: height → translateY（useNativeDriver: true）に変更
+  - SHEET_TRANSLATE 定数 (closed / half / full) で translateY 値を管理
+  - animateSheet() ヘルパー関数で状態遷移を統一
+- 現在地マーカー: 青いパルスアニメーション追加
+  - pingScale (1→2.4) + pingOpacity (0.7→0) のループ
+  - locationDot（32×32 青丸 + navigate アイコン）
+- 地図ピン: カテゴリ別カラー・アイコン・緊急バッジ・選択状態の太ボーダー
+- overflow: hidden 削除 → 横スクロール ScrollView が正常動作
+
+### 投稿残り時間表示
+- lib/utils.ts: getExpiryLabel(post: Post): string | null 追加
+  - stock: stockDuration に応じたラベル（今日中 / 残り48h / 残り3日 / 残り1週間 / 手動終了）
+  - event: eventDate + eventTime を結合
+  - help: 残り48h（固定）
+  - admin: 〆 + deadline
+- PostCard: タイトル下に time-outline アイコン + カテゴリカラーラベル
+- PostListItem: メタ行末尾に · time-outline アイコン + カテゴリカラーラベル
+
+### 投稿詳細 いいね・シェアボタン
+- app/post/[id].tsx にエンゲージメント行を追加（著者行と場所カードの間）
+  - いいね: heart / heart-outline アイコン + カウント + scale アニメーション (1→1.4→1)
+  - コメント数: 表示のみ
+  - シェア: Share.share() でOSネイティブシェートを呼び出し
+- ヘッダーの share-social-outline ボタンも handleShare に接続
+- types/index.ts: Post に likeCount?: number 追加
+- lib/mockData.ts: 全8投稿に likeCount 設定
+
+### 検索画面 キーワード検索
+- app/(tabs)/search.tsx 全面書き換え
+  - query state + クリアボタン（×）付き検索入力
+  - isSearching フラグで表示を切り替え
+  - calcMatchScore で全 MOCK_POSTS をスコアリング → 降順ソート → PostListItem 表示
+  - TrendItem / PastHotItem: TouchableOpacity でラップ → handleTrendPress でカテゴリ一致投稿の詳細へ
+- App.tsx: SearchScreen に onPostPress を追加
+
+### 認証画面 UI実装
+- app/auth/login.tsx: フル実装
+  - NaviOs ロゴ（緑丸 + location アイコン）+ タイトル + タグライン
+  - メールアドレス・パスワード入力（パスワード表示切替）
+  - パスワードを忘れた場合リンク
+  - ログインボタン（プライマリカラー・シャドウ）
+  - 新規登録へのリンク
+- app/auth/register.tsx: フル実装
+  - 表示名・メールアドレス・パスワード（8文字バリデーション + リアルタイムヒント）
+  - 利用規約・プライバシーポリシー表示
+  - アカウント作成ボタン
+  - ログインへのリンク
+
+---
 
 ## 2026-03-08 Chat 5
 
@@ -42,19 +120,18 @@
 
 ### ドキュメント整理
 - 重複ファイルを統合・削除
-  - 削除: NaviOs/docs/CLAUDE.md（dev/CLAUDE.md が正規）
-  - 削除: NaviOs/docs/mock.jsx（dev/mock.jsx が正規）
-  - 削除: dev/Navios-MVP-Phase1/（NaviOs/docs/Navios-MVP-Phase1/ が正規）
-- CLAUDE.md にコーディングルール追記
-  - TypeScript必須・行数制限・コンポーネント分離・JSDoc・スパゲッティコード禁止 など
-- CLAUDE.md にファイル管理ルール追記（正規配置ツリー図）
+- CLAUDE.md にコーディングルール・ファイル管理ルール追記
 
 ### コンポーネント改善
-- `BottomTabBar.tsx`: @expo/vector-icons (Ionicons) アイコンを追加
-  - 各タブにアクティブ/非アクティブアイコン（flash / map / search / person）
-  - 中央投稿ボタンを `add` アイコンに変更
-  - TAB_ITEMS 定数化でハードコード廃止
-- `app/(tabs)/index.tsx`: Pulse 画面のアイコン・アニメーション刷新
-  - 左上・検索ボタン・中央アイコンを Ionicons に統一
-  - 中央アイコンにパルスアニメーション追加（usePulseAnimation カスタムフック）
-  - iconWrapper（固定サイズ）+ absoluteFill pulseRing 方式でズレを解消
+- `BottomTabBar.tsx`: Ionicons アイコン追加、TAB_ITEMS 定数化
+- `app/(tabs)/index.tsx`: Pulse 画面のアイコン・アニメーション刷新（usePulseAnimation）
+
+---
+
+## 2026-03-08 Chat 1〜4
+
+- mobile/ → NaviOs/ → Mobile/ としてディレクトリ整備
+- CLAUDE.md・mock.jsx を Mobile/ 直下に移動
+- 予定構成に沿った画面ファイルの再配置
+- GitHub (nextpresen/NaviosProject 01_NaviosProject/NaviosProject/02-Mobile) へプッシュ
+- docs/progress/ 作成・progress.md・changelog.md 初版作成

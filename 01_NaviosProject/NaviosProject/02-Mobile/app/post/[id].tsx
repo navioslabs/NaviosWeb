@@ -2,7 +2,7 @@
  * DetailScreen - 投稿詳細画面
  * mock.jsx: view === 'detail' の画面
  */
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -12,10 +12,12 @@ import {
   Image,
   StyleSheet,
   Linking,
+  Share,
+  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Post } from '../../types';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import UserAvatar from '../../components/common/UserAvatar';
 import CategoryBadge from '../../components/common/CategoryBadge';
 import CategoryDetailCard from '../../components/post/CategoryDetailCard';
@@ -23,18 +25,19 @@ import CommentItem from '../../components/post/CommentItem';
 import { formatDistance, getWalkTime } from '../../lib/utils';
 import { CATEGORY_ACTIONS } from '../../constants/categories';
 import { Colors } from '../../constants/colors';
-import { MOCK_COMMENTS } from '../../lib/mockData';
-
-type Props = {
-  post: Post;
-  onBack: () => void;
-};
+import { MOCK_COMMENTS, MOCK_POSTS } from '../../lib/mockData';
 
 const PAGE_SIZE = 3;
 
-export default function DetailScreen({ post, onBack }: Props) {
+export default function DetailScreen() {
+  const router = useRouter();
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const post = MOCK_POSTS.find((p) => p.id === id) ?? MOCK_POSTS[0];
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [commentText, setCommentText] = useState('');
+  const [liked, setLiked] = useState(false);
+  const [likeCount, setLikeCount] = useState(post.likeCount ?? 0);
+  const likeScale = useRef(new Animated.Value(1)).current;
   const comments = MOCK_COMMENTS.slice(0, visibleCount);
   const remaining = MOCK_COMMENTS.length - visibleCount;
   const action = CATEGORY_ACTIONS[post.category];
@@ -43,6 +46,23 @@ export default function DetailScreen({ post, onBack }: Props) {
     const { latitude, longitude } = post.place;
     const url = `https://maps.google.com/?daddr=${latitude},${longitude}`;
     Linking.openURL(url).catch(() => {});
+  };
+
+  const handleLike = () => {
+    const next = !liked;
+    setLiked(next);
+    setLikeCount((n) => n + (next ? 1 : -1));
+    Animated.sequence([
+      Animated.timing(likeScale, { toValue: 1.4, duration: 120, useNativeDriver: true }),
+      Animated.timing(likeScale, { toValue: 1,   duration: 120, useNativeDriver: true }),
+    ]).start();
+  };
+
+  const handleShare = () => {
+    Share.share({
+      title: post.title,
+      message: `${post.title}\n${post.place.name} - ${post.place.address}`,
+    }).catch(() => {});
   };
 
   const handleActionPress = () => {
@@ -55,11 +75,11 @@ export default function DetailScreen({ post, onBack }: Props) {
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       {/* ヘッダー */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={onBack} style={styles.headerButton}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
           <Ionicons name="chevron-back" size={26} color={Colors.textPrimary} />
         </TouchableOpacity>
         <CategoryBadge categoryId={post.category} />
-        <TouchableOpacity style={styles.headerButton}>
+        <TouchableOpacity style={styles.headerButton} onPress={handleShare}>
           <Ionicons name="share-social-outline" size={22} color={Colors.textPrimary} />
         </TouchableOpacity>
       </View>
@@ -84,6 +104,34 @@ export default function DetailScreen({ post, onBack }: Props) {
               </View>
               <Text style={styles.time}>{post.createdAt}</Text>
             </View>
+          </View>
+
+          {/* いいね・コメント数 */}
+          <View style={styles.engagementRow}>
+            <TouchableOpacity style={styles.engagementBtn} onPress={handleLike} activeOpacity={0.7}>
+              <Animated.View style={{ transform: [{ scale: likeScale }] }}>
+                <Ionicons
+                  name={liked ? 'heart' : 'heart-outline'}
+                  size={20}
+                  color={liked ? '#F43F5E' : Colors.textSecondary}
+                />
+              </Animated.View>
+              <Text style={[styles.engagementCount, liked && styles.engagementCountLiked]}>
+                {likeCount}
+              </Text>
+              <Text style={styles.engagementLabel}>いいね</Text>
+            </TouchableOpacity>
+            <View style={styles.engagementDivider} />
+            <View style={styles.engagementBtn}>
+              <Ionicons name="chatbubble-outline" size={18} color={Colors.textSecondary} />
+              <Text style={styles.engagementCount}>{post.commentCount}</Text>
+              <Text style={styles.engagementLabel}>コメント</Text>
+            </View>
+            <View style={styles.engagementDivider} />
+            <TouchableOpacity style={styles.engagementBtn} onPress={handleShare} activeOpacity={0.7}>
+              <Ionicons name="share-social-outline" size={18} color={Colors.textSecondary} />
+              <Text style={styles.engagementLabel}>シェア</Text>
+            </TouchableOpacity>
           </View>
 
           {/* 場所情報 */}
@@ -258,4 +306,36 @@ const styles = StyleSheet.create({
   navButtonText: { fontSize: 14, fontWeight: '700', color: Colors.textPrimary },
   actionButton: { flex: 1, padding: 12, borderRadius: 12, alignItems: 'center' },
   actionButtonText: { fontSize: 14, fontWeight: '700', color: '#fff' },
+  engagementRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surfaceSecondary,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+  },
+  engagementBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  engagementDivider: {
+    width: 1,
+    height: 20,
+    backgroundColor: Colors.border,
+  },
+  engagementCount: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  engagementCountLiked: {
+    color: '#F43F5E',
+  },
+  engagementLabel: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+  },
 });

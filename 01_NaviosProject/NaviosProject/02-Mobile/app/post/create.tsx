@@ -16,13 +16,10 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { CATEGORIES, CategoryId, getCategoryInfo, getCategoryIconName } from '../../constants/categories';
 import { PostFormData } from '../../types';
 import { Colors } from '../../constants/colors';
-
-type Props = {
-  onClose?: () => void;
-};
 
 const STOCK_DURATION_OPTIONS = [
   { value: 'today', label: '今日中' },
@@ -59,7 +56,8 @@ const INITIAL_FORM: PostFormData = {
   requirements: [],
 };
 
-export default function CreatePostScreen({ onClose }: Props) {
+export default function CreatePostScreen() {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const [form, setForm] = useState<PostFormData>(INITIAL_FORM);
 
@@ -75,7 +73,7 @@ export default function CreatePostScreen({ onClose }: Props) {
         text: 'OK',
         onPress: () => {
           setForm(INITIAL_FORM);
-          onClose?.();
+          router.back();
         },
       },
     ]);
@@ -88,7 +86,7 @@ export default function CreatePostScreen({ onClose }: Props) {
     <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       {/* ヘッダー */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.closeButton} onPress={onClose} activeOpacity={0.7}>
+        <TouchableOpacity style={styles.closeButton} onPress={() => router.back()} activeOpacity={0.7}>
           <Ionicons name="close" size={22} color={Colors.textSecondary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>情報を投稿</Text>
