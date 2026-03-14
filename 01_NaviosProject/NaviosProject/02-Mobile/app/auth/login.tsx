@@ -1,59 +1,60 @@
-/**
- * LoginScreen - ログイン画面
- * Supabase Auth 接続は Phase 2。現在はUIのみ。
- */
 import React, { useState } from 'react';
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import { Colors } from '../../constants/colors';
+import { signIn } from '../../lib/auth';
 
 export default function LoginScreen() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
+    setErrorMessage('');
+
     if (!email.trim() || !password.trim()) {
-      Alert.alert('入力エラー', 'メールアドレスとパスワードを入力してください');
+      setErrorMessage('メールアドレスとパスワードを入力してください。');
       return;
     }
-    // TODO: Supabase Auth ログイン実装 (Phase 2)
-    Alert.alert('ログイン（デモ）', 'Phase 2 で Supabase Auth を接続します', [
-      { text: 'OK', onPress: () => router.replace('/(tabs)') },
-    ]);
+
+    try {
+      setSubmitting(true);
+      await signIn(email, password);
+      router.replace('/(tabs)');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'ログインに失敗しました。';
+      setErrorMessage(message);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        style={styles.keyboardView}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      <KeyboardAvoidingView style={styles.keyboardView} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-
-          {/* ロゴ */}
           <View style={styles.logoArea}>
             <View style={styles.logoCircle}>
               <Ionicons name="location" size={36} color="#fff" />
             </View>
             <Text style={styles.appName}>NaviOs</Text>
-            <Text style={styles.appTagline}>地域をつなぐ情報共有</Text>
           </View>
 
-          {/* フォーム */}
           <View style={styles.form}>
             <Text style={styles.formTitle}>ログイン</Text>
 
@@ -64,12 +65,13 @@ export default function LoginScreen() {
                 <TextInput
                   style={styles.input}
                   value={email}
-                  onChangeText={setEmail}
+                  onChangeText={(text) => { setEmail(text); setErrorMessage(''); }}
                   placeholder="example@email.com"
                   placeholderTextColor={Colors.textMuted}
                   keyboardType="email-address"
                   autoCapitalize="none"
                   autoCorrect={false}
+                  editable={!submitting}
                 />
               </View>
             </View>
@@ -81,42 +83,42 @@ export default function LoginScreen() {
                 <TextInput
                   style={styles.input}
                   value={password}
-                  onChangeText={setPassword}
+                  onChangeText={(text) => { setPassword(text); setErrorMessage(''); }}
                   placeholder="パスワードを入力"
                   placeholderTextColor={Colors.textMuted}
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
+                  editable={!submitting}
                 />
-                <TouchableOpacity onPress={() => setShowPassword((v) => !v)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <TouchableOpacity
+                  onPress={() => setShowPassword((v) => !v)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  disabled={submitting}
+                >
                   <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={18} color={Colors.textMuted} />
                 </TouchableOpacity>
               </View>
+              {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
             </View>
 
-            <TouchableOpacity style={styles.forgotButton}>
-              <Text style={styles.forgotText}>パスワードをお忘れですか？</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.loginButton} onPress={handleLogin} activeOpacity={0.85}>
-              <Text style={styles.loginButtonText}>ログイン</Text>
+            <TouchableOpacity
+              style={[styles.loginButton, submitting && styles.loginButtonDisabled]}
+              onPress={handleLogin}
+              activeOpacity={0.85}
+              disabled={submitting}
+            >
+              {submitting ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.loginButtonText}>ログイン</Text>}
             </TouchableOpacity>
           </View>
 
-          {/* 区切り */}
-          <View style={styles.dividerRow}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>または</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
-          {/* 新規登録へ */}
           <View style={styles.registerRow}>
-            <Text style={styles.registerPrompt}>アカウントをお持ちでないですか？</Text>
-            <TouchableOpacity onPress={() => router.push('/auth/register')}>
-              <Text style={styles.registerLink}>新規登録</Text>
-            </TouchableOpacity>
+            <Text style={styles.registerPrompt}>アカウントをお持ちでない方</Text>
+            <Link href="/auth/register" asChild>
+              <TouchableOpacity disabled={submitting}>
+                <Text style={styles.registerLink}>新規登録</Text>
+              </TouchableOpacity>
+            </Link>
           </View>
-
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -142,7 +144,6 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   appName: { fontSize: 28, fontWeight: '800', color: Colors.textPrimary },
-  appTagline: { fontSize: 13, color: Colors.textSecondary },
   form: { gap: 16, marginBottom: 24 },
   formTitle: { fontSize: 20, fontWeight: '700', color: Colors.textPrimary, marginBottom: 4 },
   fieldGroup: { gap: 6 },
@@ -159,8 +160,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceSecondary,
   },
   input: { flex: 1, fontSize: 14, color: Colors.textPrimary },
-  forgotButton: { alignSelf: 'flex-end' },
-  forgotText: { fontSize: 12, color: Colors.primary, fontWeight: '600' },
+  errorText: { fontSize: 12, color: '#EF4444', marginTop: 4, paddingHorizontal: 4 },
   loginButton: {
     backgroundColor: Colors.primary,
     borderRadius: 12,
@@ -174,10 +174,8 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 4,
   },
+  loginButtonDisabled: { opacity: 0.7 },
   loginButtonText: { fontSize: 16, fontWeight: '700', color: '#fff' },
-  dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: Colors.border },
-  dividerText: { fontSize: 12, color: Colors.textMuted },
   registerRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6 },
   registerPrompt: { fontSize: 13, color: Colors.textSecondary },
   registerLink: { fontSize: 13, fontWeight: '700', color: Colors.primary },

@@ -1,6 +1,58 @@
 # Changelog
 
-最終更新: 2026-03-14
+最終更新: 2026-03-15
+
+## 2026-03-15 - カテゴリ名正式化 + Nearbyフローティングカード + 4画面同時改修
+
+### カテゴリ名変更
+- `constants/categories.ts` のラベルを正式名称に修正
+  - `特売` → `物資`、`助け合い` → `近助`、`自治会` → `行政`
+
+### Nearbyフローティングプレビューカード
+- `app/(tabs)/nearby.tsx` にピン選択時のフローティングカードを追加
+  - ピンタップ → スプリングスライドイン / 別ピン → 切替 / 空白タップ → 消去
+- MapLibre未統合のためダミーピンでの動作
+
+### マイページ改修
+- `components/common/UserAvatar.tsx`: URL画像対応（`http`で始まる場合Image表示）
+- `app/(tabs)/profile.tsx`:
+  - アバタータップ → ImagePicker → Supabase Storage `avatars` にアップロード
+  - カメラアイコンオーバーレイ表示
+  - ユーザー名インライン編集（鉛筆アイコン → TextInput → 保存/キャンセル）
+
+### 投稿画面モダンUI
+- `app/post/create.tsx`:
+  - カテゴリ選択を2x2グリッド化
+  - セクション間ディバイダー（カード入れ子→フラット構造）
+  - ヘッダー改善（円形閉じる / 中央タイトル / 送信アイコン付き）
+  - 画像プレビュー100x100に拡大
+  - 時刻入力をスクロール式ピッカーモーダルに変更（時0-23 / 分00-55）
+
+### Pulse画面改修
+- `app/(tabs)/index.tsx`:
+  - ヘッダー完全削除
+  - 検索ボックスを画面最下部にフローティング配置
+  - 候補表示を横スクロールのコンパクトチップに
+  - カラー: 紫(#7C3AED) → ティール(#0D9488)
+
+### 検索→タイムライン変換
+- `app/(tabs)/search.tsx`: 検索機能を削除、全投稿を新着順表示（FlatList + pull-to-refresh + カテゴリフィルター）
+- `app/(tabs)/_layout.tsx`: タブラベル `検索`→`タイムライン`、アイコン `search`→`time`
+
+### 画像最適化
+- `lib/postService.ts`: `optimizeImage()` 関数追加（`expo-image-manipulator`使用）
+  - 投稿画像: max 800px, quality 0.7
+  - アバター: max 400px, quality 0.7
+- 要インストール: `npx expo install expo-image-manipulator`
+
+## 2026-03-14 - docs folder reclassification
+- Added numbered documentation folders:
+  - `docs/01_spec`
+  - `docs/02_current`
+  - `docs/03_handoff`
+  - `docs/04_history`
+- Copied current active docs into the new categorized structure.
+- Added `docs/progress/README_legacy.md` to mark old `progress` folder as legacy.
 
 ## 2026-03-14 - Documentation / workspace cleanup
 - Added `docs/README.md` as docs entry point.
@@ -277,3 +329,18 @@ added 473 packages in 1m
 - Added handoff docs:
   - `docs/progress/roadmap-refresh-2026-03-14.md` (updated)
   - `docs/progress/session-handoff-2026-03-14.md`
+
+## 2026-03-14 - Search/Pulse migration and post UX refresh
+- Search (`app/(tabs)/search.tsx`) を Supabase データ利用へ移行
+- Pulse (`app/(tabs)/index.tsx`) を Supabase データ利用へ移行
+- 投稿画像導線を接続
+  - `app/post/create.tsx` で画像選択
+  - `lib/postService.ts` で Storage `images` アップロード
+  - `post_images` insert
+- 近くタブのホットカード崩れを修正（長いタイトルでも重なり回避）
+- ログイン画面から `Community Info App` 文言を削除
+- 投稿作成のplaceholderを日本語化
+- 投稿日付入力をカレンダー式に変更
+- 投稿完了ページ `app/post/success.tsx` を追加
+- 主要UIの文字化けを修正
+- テスト実行は環境制約（`node/npm/npx` 不在）で未完

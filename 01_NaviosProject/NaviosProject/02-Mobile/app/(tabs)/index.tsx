@@ -1,9 +1,4 @@
-/**
- * PulseScreen - Pulse（ホーム）画面
- * mock.jsx: view === 'pulse' の画面
- * AI風キーワード検索 → 投稿マッチング表示
- */
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -12,25 +7,22 @@ import {
   FlatList,
   ActivityIndicator,
   Animated,
+  ScrollView,
   StyleSheet,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Post } from '../../types';
 import { calcMatchScore } from '../../lib/utils';
 import PostListItem from '../../components/post/PostListItem';
 import { Colors } from '../../constants/colors';
+import { usePosts } from '../../hooks/usePosts';
 
-// TODO: 実APIに差し替え
-import { MOCK_POSTS } from '../../lib/mockData';
+const QUICK_TAGS = ['水', '電気', '買い物', 'イベント', '子育て'];
 
-const QUICK_TAGS = ['野菜', '卵', '手伝い', 'イベント', '給付金'];
+const BOTTOM_INPUT_HEIGHT = 120;
 
-/**
- * 中央アイコンのパルスアニメーションを管理するフック
- * @returns アニメーション値（scale, opacity）
- */
 function usePulseAnimation() {
   const scale = useRef(new Animated.Value(1)).current;
   const opacity = useRef(new Animated.Value(0.8)).current;
@@ -46,8 +38,9 @@ function usePulseAnimation() {
           Animated.timing(scale, { toValue: 1, duration: 900, useNativeDriver: true }),
           Animated.timing(opacity, { toValue: 0.8, duration: 900, useNativeDriver: true }),
         ]),
-      ])
+      ]),
     );
+
     pulse.start();
     return () => pulse.stop();
   }, [scale, opacity]);
@@ -55,150 +48,130 @@ function usePulseAnimation() {
   return { scale, opacity };
 }
 
-/**
- * Pulse（ホーム）画面
- * NaviOs AI へのキーワード検索と投稿マッチング結果を表示する
- */
 export default function PulseScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<(Post & { matchScore: number })[]>([]);
   const [searched, setSearched] = useState(false);
   const { scale, opacity } = usePulseAnimation();
+  const { posts, loading: postLoading, error } = usePosts({ includeEnded: false, limit: 120 });
 
-  /** キーワード検索を実行してスコアリング */
+  const recommended = useMemo(() => [...posts].sort((a, b) => b.commentCount - a.commentCount).slice(0, 3), [posts]);
+
   const handleSearch = () => {
-    if (!query.trim()) return;
+    if (!query.trim() || postLoading) return;
+
     setLoading(true);
     setSearched(false);
-    // モック: 1秒遅延でスコアリング
+
     setTimeout(() => {
-      const scored = MOCK_POSTS
+      const scored = posts
         .map((p) => ({ ...p, matchScore: calcMatchScore(p, query) }))
         .filter((p) => p.matchScore > 0)
         .sort((a, b) => b.matchScore - a.matchScore);
+
       setResults(scored);
       setLoading(false);
       setSearched(true);
-    }, 1000);
+    }, 550);
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* ヘッダー */}
-      <View style={styles.header}>
-        <View style={styles.titleRow}>
-          <View style={styles.iconBox}>
-            <Ionicons name="flash" size={22} color="#fff" />
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Main content area */}
+      <View style={{ flex: 1, paddingBottom: BOTTOM_INPUT_HEIGHT }}>
+        {postLoading ? (
+          <View style={styles.center}>
+            <ActivityIndicator size="large" color={Colors.teal} />
+            <Text style={styles.loadingText}>投稿を読み込み中...</Text>
           </View>
-          <View>
-            <Text style={styles.title}>NaviOs AI</Text>
-            <Text style={styles.subtitle}>近くの情報をAIがキャッチ</Text>
+        ) : null}
+
+        {error ? (
+          <View style={styles.center}>
+            <Ionicons name="alert-circle-outline" size={48} color={Colors.danger} style={styles.emptyIcon} />
+            <Text style={styles.emptyText}>{error}</Text>
           </View>
-        </View>
-      </View>
+        ) : null}
 
-      {/* 検索入力 */}
-      <View style={styles.searchBox}>
-        <TextInput
-          style={styles.input}
-          value={query}
-          onChangeText={setQuery}
-          onSubmitEditing={handleSearch}
-          placeholder="NaviOs AIに聞いてみる..."
-          placeholderTextColor={Colors.textMuted}
-          returnKeyType="search"
-        />
-        <TouchableOpacity style={styles.searchButton} onPress={handleSearch} activeOpacity={0.8}>
-          {loading ? (
-            <ActivityIndicator color="#fff" size="small" />
-          ) : (
-            <Ionicons name="search" size={20} color="#fff" />
-          )}
-        </TouchableOpacity>
-      </View>
+        {!error && loading ? (
+          <View style={styles.center}>
+            <ActivityIndicator size="large" color={Colors.teal} />
+            <Text style={styles.loadingText}>関連投稿を整理しています...</Text>
+          </View>
+        ) : null}
 
-      {/* クイックタグ */}
-      <View style={styles.tagsRow}>
-        {QUICK_TAGS.map((tag) => (
-          <TouchableOpacity
-            key={tag}
-            style={styles.tag}
-            onPress={() => setQuery(tag)}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.tagText}>{tag}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+        {!error && searched && !loading && results.length === 0 ? (
+          <View style={styles.center}>
+            <Ionicons name="search" size={48} color={Colors.textMuted} style={styles.emptyIcon} />
+            <Text style={styles.emptyText}>関連する投稿が見つかりませんでした</Text>
+            <Text style={styles.emptySubText}>別のキーワードで試してください</Text>
+          </View>
+        ) : null}
 
-      {/* コンテンツ: ローディング中 */}
-      {loading && (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color="#8B5CF6" />
-          <Text style={styles.loadingText}>近くの情報を探しています...</Text>
-        </View>
-      )}
+        {!error && searched && !loading && results.length > 0 ? (
+          <FlatList
+            data={results}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.list}
+            ItemSeparatorComponent={() => <View style={styles.separator} />}
+            ListHeaderComponent={<Text style={styles.resultHeader}>{results.length}件見つかりました</Text>}
+            renderItem={({ item }) => (
+              <PostListItem post={item} onPress={(post) => router.push(`/post/${post.id}`)} showMatchScore={item.matchScore} />
+            )}
+          />
+        ) : null}
 
-      {/* コンテンツ: 検索結果なし */}
-      {searched && !loading && results.length === 0 && (
-        <View style={styles.center}>
-          <Ionicons name="search" size={48} color={Colors.textMuted} style={styles.emptyIcon} />
-          <Text style={styles.emptyText}>該当する情報が見つかりませんでした</Text>
-          <Text style={styles.emptySubText}>別のキーワードで試してみてください</Text>
-        </View>
-      )}
-
-      {/* コンテンツ: 検索結果あり */}
-      {searched && !loading && results.length > 0 && (
-        <FlatList
-          data={results}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.list}
-          ItemSeparatorComponent={() => <View style={styles.separator} />}
-          ListHeaderComponent={
-            <Text style={styles.resultHeader}>{results.length}件見つかりました ✨</Text>
-          }
-          renderItem={({ item }) => (
-            <PostListItem
-              post={item}
-              onPress={(post) => router.push(`/post/${post.id}`)}
-              showMatchScore={item.matchScore}
-            />
-          )}
-        />
-      )}
-
-      {/* コンテンツ: 初期状態（中央パルスアイコン） */}
-      {!searched && !loading && (
-        <View style={styles.center}>
-          {/* パルスエフェクト: 固定サイズコンテナでリングをabsoluteFill */}
-          <View style={styles.iconWrapper}>
-            <Animated.View style={[styles.pulseRing, { transform: [{ scale }], opacity }]} />
-            <View style={styles.aiIconBox}>
-              <Ionicons name="flash" size={40} color="#fff" />
+        {!error && !searched && !loading && !postLoading ? (
+          <View style={styles.center}>
+            <View style={styles.iconWrapper}>
+              <Animated.View style={[styles.pulseRing, { transform: [{ scale }], opacity }]} />
+              <View style={styles.aiIconBox}>
+                <Ionicons name="flash" size={40} color="#fff" />
+              </View>
             </View>
-          </View>
 
-          <Text style={styles.emptyTitle}>NaviOs AIに聞いてみよう</Text>
-          <Text style={styles.emptySubText}>
-            あなたの言葉で探してみてください。{'\n'}AIが近くの最適な情報を見つけます。
-          </Text>
-          <View style={styles.hintsRow}>
-            {['新鮮な卵が欲しい', '今日のイベント', '誰か手伝って'].map((hint) => (
-              <TouchableOpacity
-                key={hint}
-                style={styles.hint}
-                onPress={() => setQuery(hint)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.hintText}>"{hint}"</Text>
-              </TouchableOpacity>
-            ))}
+            <Text style={styles.emptyTitle}>NaviOs AIに相談してみる</Text>
+            <Text style={styles.emptySubText}>気になる言葉を入れると、近くの投稿から候補を表示します。</Text>
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.hintsScroll} contentContainerStyle={styles.hintsRow}>
+              {recommended.map((item) => (
+                <TouchableOpacity key={item.id} style={styles.hint} onPress={() => setQuery(item.title)} activeOpacity={0.7}>
+                  <Text style={styles.hintText} numberOfLines={1}>{item.title}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
           </View>
+        ) : null}
+      </View>
+
+      {/* Bottom floating search area */}
+      <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 8 }]}>
+        <View style={styles.tagsRow}>
+          {QUICK_TAGS.map((tag) => (
+            <TouchableOpacity key={tag} style={styles.tag} onPress={() => setQuery(tag)} activeOpacity={0.7}>
+              <Text style={styles.tagText}>{tag}</Text>
+            </TouchableOpacity>
+          ))}
         </View>
-      )}
+
+        <View style={styles.searchBox}>
+          <TextInput
+            style={styles.input}
+            value={query}
+            onChangeText={setQuery}
+            onSubmitEditing={handleSearch}
+            placeholder="例: 新鮮な野菜が買える場所"
+            placeholderTextColor={Colors.textMuted}
+            returnKeyType="search"
+          />
+          <TouchableOpacity style={styles.searchButton} onPress={handleSearch} activeOpacity={0.8}>
+            {loading ? <ActivityIndicator color="#fff" size="small" /> : <Ionicons name="send" size={20} color="#fff" />}
+          </TouchableOpacity>
+        </View>
+      </View>
     </SafeAreaView>
   );
 }
@@ -206,46 +179,34 @@ export default function PulseScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F3FF',
+    backgroundColor: Colors.tealLight,
   },
-  header: {
-    padding: 16,
-    paddingTop: 8,
-  },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  iconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: '#7C3AED',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: Colors.textPrimary,
-  },
-  subtitle: {
-    fontSize: 11,
-    color: Colors.textSecondary,
+  bottomBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#fff',
+    paddingTop: 10,
+    paddingHorizontal: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 10,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
   },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: 16,
-    marginBottom: 12,
     gap: 8,
   },
   input: {
     flex: 1,
     height: 48,
-    backgroundColor: '#fff',
-    borderRadius: 12,
+    backgroundColor: Colors.tealLight,
+    borderRadius: 24,
     paddingHorizontal: 16,
     fontSize: 14,
     borderWidth: 1,
@@ -255,22 +216,21 @@ const styles = StyleSheet.create({
   searchButton: {
     width: 48,
     height: 48,
-    backgroundColor: '#7C3AED',
-    borderRadius: 12,
+    backgroundColor: Colors.teal,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
   },
   tagsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    paddingHorizontal: 16,
     gap: 8,
-    marginBottom: 16,
+    marginBottom: 10,
   },
   tag: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    backgroundColor: '#fff',
+    backgroundColor: '#CCFBF1',
     borderRadius: 20,
     borderWidth: 1,
     borderColor: Colors.border,
@@ -278,11 +238,11 @@ const styles = StyleSheet.create({
   tagText: {
     fontSize: 12,
     fontWeight: '500',
-    color: Colors.textSecondary,
+    color: Colors.teal,
   },
   list: {
     padding: 16,
-    paddingTop: 0,
+    paddingTop: 16,
   },
   separator: {
     height: 10,
@@ -307,7 +267,6 @@ const styles = StyleSheet.create({
   emptyIcon: {
     marginBottom: 12,
   },
-  // 中央パルスアイコン
   iconWrapper: {
     width: 110,
     height: 110,
@@ -322,16 +281,16 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     borderRadius: 55,
-    backgroundColor: 'rgba(124, 58, 237, 0.35)',
+    backgroundColor: 'rgba(13, 148, 136, 0.3)',
   },
   aiIconBox: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#7C3AED',
+    backgroundColor: Colors.teal,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#7C3AED',
+    shadowColor: Colors.teal,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.5,
     shadowRadius: 12,
@@ -355,23 +314,25 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginTop: 4,
   },
+  hintsScroll: {
+    marginTop: 20,
+    maxHeight: 40,
+  },
   hintsRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 8,
-    marginTop: 20,
-    justifyContent: 'center',
+    paddingHorizontal: 4,
   },
   hint: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 6,
     backgroundColor: 'rgba(255,255,255,0.8)',
-    borderRadius: 20,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: Colors.border,
   },
   hintText: {
-    fontSize: 12,
+    fontSize: 11,
     color: Colors.textSecondary,
   },
 });

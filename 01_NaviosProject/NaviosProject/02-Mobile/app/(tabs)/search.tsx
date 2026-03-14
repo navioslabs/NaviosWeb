@@ -1,261 +1,375 @@
-/**
- * SearchScreen - 検索画面
- * mock.jsx: view === 'search' の画面
- * キーワード検索 / トレンド / 過去の盛り上がり / カテゴリから探す
- */
-import React, { useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
+  SectionList,
   ScrollView,
   StyleSheet,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { CATEGORIES, CategoryId, getCategoryIconName, getCategoryInfo } from '../../constants/categories';
+import { CATEGORIES, CategoryId, getCategoryInfo, getCategoryIconName } from '../../constants/categories';
 import { Colors } from '../../constants/colors';
-import { TrendingPost, PastHotPost } from '../../types';
-import { MOCK_TRENDING, MOCK_PAST_HOT, MOCK_POSTS } from '../../lib/mockData';
-import { calcMatchScore } from '../../lib/utils';
 import PostListItem from '../../components/post/PostListItem';
+import { PostListSkeleton } from '../../components/common/SkeletonLoader';
+import { usePosts } from '../../hooks/usePosts';
+import type { Post } from '../../types';
 
-type SectionProps = {
-  iconName: keyof typeof Ionicons.glyphMap;
-  iconColor: string;
-  iconBg: string;
-  title: string;
-  children: React.ReactNode;
-};
+type FilterTab = 'now' | 'hot' | 'ended';
 
-export default function SearchScreen() {
+const FILTER_TABS: { key: FilterTab; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { key: 'now', label: '最新', icon: 'radio-outline' },
+  { key: 'hot', label: '盛り上がり', icon: 'flame-outline' },
+  { key: 'ended', label: '過去の人気', icon: 'archive-outline' },
+];
+
+export default function TimelineScreen() {
   const router = useRouter();
-  const [query, setQuery] = useState('');
+  const [activeTab, setActiveTab] = useState<FilterTab>('now');
+  const { posts, loading, error, refetch } = usePosts({ includeEnded: true, limit: 120 });
+  const [refreshing, setRefreshing] = useState(false);
 
-  const isSearching = query.trim().length > 0;
+  // Active (not ended) posts
+  const activePosts = useMemo(() => posts.filter((p) => !p.isEnded), [posts]);
 
-  const results = isSearching
-    ? MOCK_POSTS
-        .map((p) => ({
-          post: p,
-          score: calcMatchScore(
-            { title: p.title, content: p.content, category: p.category, distance: p.distance, urgency: p.urgency },
-            query
-          ),
-        }))
-        .filter((x) => x.score > 0)
-        .sort((a, b) => b.score - a.score)
-    : [];
+  // Sections for each tab
+  const sections = useMemo(() => {
+    if (activeTab === 'now') {
+      // Group by category, newest first within each
+      const grouped = CATEGORIES.map((cat) => {
+        const items = activePosts
+          .filter((p) => p.category === cat.id)
+          .slice(0, 5);
+        return { cat, items };
+      }).filter((g) => g.items.length > 0);
 
-  /** カテゴリに一致するMOCK_POSTを探してdetailへ */
-  const handleTrendPress = (category: string) => {
-    const matched = MOCK_POSTS.find((p) => p.category === category) ?? MOCK_POSTS[0];
-    router.push(`/post/${matched.id}`);
-  };
+      return grouped.map((g) => ({
+        key: g.cat.id,
+        title: g.cat.label,
+        icon: getCategoryIconName(g.cat.id) as keyof typeof Ionicons.glyphMap,
+        color: g.cat.color,
+        count: activePosts.filter((p) => p.category === g.cat.id).length,
+        data: g.items,
+      }));
+    }
+
+    if (activeTab === 'hot') {
+      // Top posts by engagement (comments + likes), active only
+      const hotPosts = [...activePosts]
+        .sort((a, b) => {
+          const scoreA = a.commentCount * 3 + (a.likeCount ?? 0) * 2;
+          const scoreB = b.commentCount * 3 + (b.likeCount ?? 0) * 2;
+          return scoreB - scoreA;
+        })
+        .slice(0, 15);
+
+      if (hotPosts.length === 0) return [];
+      return [{
+        key: 'hot',
+        title: '今盛り上がっている投稿',
+        icon: 'flame' as keyof typeof Ionicons.glyphMap,
+        color: '#F59E0B',
+        count: hotPosts.length,
+        data: hotPosts,
+      }];
+    }
+
+    // ended tab
+    const endedPosts = posts
+      .filter((p) => p.isEnded)
+      .sort((a, b) => b.commentCount - a.commentCount)
+      .slice(0, 20);
+
+    if (endedPosts.length === 0) return [];
+    return [{
+      key: 'ended',
+      title: '過去に盛り上がった投稿',
+      icon: 'trophy-outline' as keyof typeof Ionicons.glyphMap,
+      color: '#8B5CF6',
+      count: endedPosts.length,
+      data: endedPosts,
+    }];
+  }, [activeTab, activePosts, posts]);
+
+  // Summary stats
+  const stats = useMemo(() => ({
+    total: activePosts.length,
+    categories: CATEGORIES.map((cat) => ({
+      ...cat,
+      count: activePosts.filter((p) => p.category === cat.id).length,
+    })),
+  }), [activePosts]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await refetch();
+    setRefreshing(false);
+  }, [refetch]);
+
+  const renderItem = useCallback(
+    ({ item }: { item: Post }) => (
+      <PostListItem post={item} onPress={(p) => router.push(`/post/${p.id}`)} />
+    ),
+    [router],
+  );
+
+  const renderSectionHeader = useCallback(
+    ({ section }: { section: { title: string; icon: keyof typeof Ionicons.glyphMap; color: string; count: number } }) => (
+      <View style={styles.sectionHeader}>
+        <View style={[styles.sectionIconBox, { backgroundColor: section.color }]}>
+          <Ionicons name={section.icon} size={14} color="#fff" />
+        </View>
+        <Text style={styles.sectionTitle}>{section.title}</Text>
+        <View style={styles.sectionBadge}>
+          <Text style={styles.sectionBadgeText}>{section.count}</Text>
+        </View>
+      </View>
+    ),
+    [],
+  );
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* ヘッダー */}
+      {/* Header with warm gradient feel */}
       <View style={styles.header}>
-        <Text style={styles.title}>検索</Text>
-        <View style={styles.searchRow}>
-          <Ionicons name="search-outline" size={18} color={Colors.textMuted} />
-          <TextInput
-            style={styles.input}
-            value={query}
-            onChangeText={setQuery}
-            placeholder="キーワードで検索..."
-            placeholderTextColor={Colors.textMuted}
-            returnKeyType="search"
-          />
-          {query.length > 0 && (
-            <TouchableOpacity onPress={() => setQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
-            </TouchableOpacity>
-          )}
+        <View style={styles.headerTop}>
+          <View style={styles.headerTitleRow}>
+            <View style={styles.headerIcon}>
+              <Ionicons name="newspaper-outline" size={18} color="#fff" />
+            </View>
+            <Text style={styles.title}>タイムライン</Text>
+          </View>
+          <Text style={styles.headerSub}>まちの最新情報</Text>
         </View>
+
+        {/* Mini stats bar */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statsRow}>
+          {stats.categories.map((cat) => (
+            <View key={cat.id} style={styles.statChip}>
+              <View style={[styles.statDot, { backgroundColor: cat.color }]} />
+              <Text style={styles.statLabel}>{cat.label}</Text>
+              <Text style={[styles.statCount, { color: cat.color }]}>{cat.count}</Text>
+            </View>
+          ))}
+        </ScrollView>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      {/* Filter tabs */}
+      <View style={styles.tabBar}>
+        {FILTER_TABS.map((tab) => {
+          const isActive = activeTab === tab.key;
+          return (
+            <TouchableOpacity
+              key={tab.key}
+              style={[styles.tabItem, isActive && styles.tabItemActive]}
+              onPress={() => setActiveTab(tab.key)}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name={tab.icon}
+                size={16}
+                color={isActive ? '#E97316' : Colors.textMuted}
+              />
+              <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]}>
+                {tab.label}
+              </Text>
+              {isActive ? <View style={styles.tabIndicator} /> : null}
+            </TouchableOpacity>
+          );
+        })}
+      </View>
 
-        {/* 検索結果 */}
-        {isSearching && (
-          <View style={styles.section}>
-            <Text style={styles.resultsHeader}>
-              {results.length > 0 ? `${results.length}件の検索結果` : 'キーワードに一致する投稿が見つかりません'}
-            </Text>
-            {results.map(({ post, score }) => (
-              <PostListItem key={post.id} post={post} onPress={(p) => router.push(`/post/${p.id}`)} showMatchScore={score} />
-            ))}
-          </View>
-        )}
-
-        {/* 通常セクション（検索していないとき） */}
-        {!isSearching && (
-          <>
-            <Section iconName="flame" iconColor="#EF4444" iconBg="#FEE2E2" title="今日のトレンド">
-              {MOCK_TRENDING.map((post) => (
-                <TrendItem key={post.id} post={post} onPress={() => handleTrendPress(post.category)} />
-              ))}
-            </Section>
-
-            <Section iconName="time-outline" iconColor="#7C3AED" iconBg="#EDE9FE" title="過去の盛り上がり">
-              {MOCK_PAST_HOT.map((post) => (
-                <PastHotItem key={post.id} post={post} onPress={() => handleTrendPress(post.category)} />
-              ))}
-            </Section>
-
-            <Section iconName="grid-outline" iconColor="#059669" iconBg="#D1FAE5" title="カテゴリから探す">
-              <View style={styles.categoryGrid}>
-                {CATEGORIES.map((cat) => {
-                  const count = MOCK_POSTS.filter((p) => p.category === cat.id).length;
-                  return (
-                    <TouchableOpacity
-                      key={cat.id}
-                      style={[styles.categoryCard, { backgroundColor: cat.color }]}
-                      onPress={() => router.push({ pathname: '/(tabs)/nearby', params: { category: cat.id } })}
-                      activeOpacity={0.8}
-                    >
-                      <Ionicons
-                        name={getCategoryIconName(cat.id) as keyof typeof Ionicons.glyphMap}
-                        size={28}
-                        color="#fff"
-                        style={styles.categoryIcon}
-                      />
-                      <Text style={styles.categoryLabel}>{cat.label}</Text>
-                      <Text style={styles.categoryCount}>{count}件の投稿</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </Section>
-          </>
-        )}
-      </ScrollView>
+      {/* Content */}
+      {loading && !refreshing ? (
+        <PostListSkeleton count={5} />
+      ) : error ? (
+        <View style={styles.errorBox}>
+          <Ionicons name="alert-circle-outline" size={16} color={Colors.danger} />
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      ) : (
+        <SectionList
+          sections={sections}
+          keyExtractor={(item) => item.id}
+          renderItem={renderItem}
+          renderSectionHeader={renderSectionHeader}
+          contentContainerStyle={styles.listContent}
+          ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
+          SectionSeparatorComponent={() => <View style={{ height: 6 }} />}
+          stickySectionHeadersEnabled={false}
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          ListEmptyComponent={
+            <View style={styles.emptyBox}>
+              <Ionicons
+                name={activeTab === 'ended' ? 'archive-outline' : 'document-text-outline'}
+                size={40}
+                color={Colors.textMuted}
+              />
+              <Text style={styles.emptyTitle}>
+                {activeTab === 'ended' ? '終了した投稿はまだありません' : '投稿がありません'}
+              </Text>
+              <Text style={styles.emptyText}>
+                {activeTab === 'ended' ? '過去の人気投稿がここに表示されます' : '新しい投稿を待っています'}
+              </Text>
+            </View>
+          }
+        />
+      )}
     </SafeAreaView>
   );
 }
 
-function Section({ iconName, iconColor, iconBg, title, children }: SectionProps) {
-  return (
-    <View style={styles.section}>
-      <View style={styles.sectionHeader}>
-        <View style={[styles.sectionIconBox, { backgroundColor: iconBg }]}>
-          <Ionicons name={iconName} size={18} color={iconColor} />
-        </View>
-        <Text style={styles.sectionTitle}>{title}</Text>
-      </View>
-      {children}
-    </View>
-  );
-}
-
-function TrendItem({ post, onPress }: { post: TrendingPost; onPress: () => void }) {
-  const cat = getCategoryInfo(post.category as CategoryId);
-  return (
-    <TouchableOpacity style={styles.trendItem} onPress={onPress} activeOpacity={0.7}>
-      <View style={[styles.trendIconBox, { backgroundColor: cat.color }]}>
-        <Ionicons name={getCategoryIconName(post.category) as keyof typeof Ionicons.glyphMap} size={20} color="#fff" />
-      </View>
-      <View style={styles.trendBody}>
-        <Text style={styles.trendTitle} numberOfLines={1}>{post.title}</Text>
-        <Text style={styles.trendMeta}>{post.spotName} · {post.time}</Text>
-      </View>
-      <View style={styles.trendStats}>
-        <View style={styles.statRow}>
-          <Ionicons name="flame" size={12} color="#EF4444" />
-          <Text style={styles.trendLike}>{post.likes}</Text>
-        </View>
-        <View style={styles.statRow}>
-          <Ionicons name="chatbubble-outline" size={11} color={Colors.textMuted} />
-          <Text style={styles.trendComment}>{post.comments}</Text>
-        </View>
-      </View>
-      <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
-    </TouchableOpacity>
-  );
-}
-
-function PastHotItem({ post, onPress }: { post: PastHotPost; onPress: () => void }) {
-  const cat = getCategoryInfo(post.category as CategoryId);
-  return (
-    <TouchableOpacity style={styles.trendItem} onPress={onPress} activeOpacity={0.7}>
-      <View style={[styles.trendIconBox, { backgroundColor: cat.color }]}>
-        <Ionicons name={getCategoryIconName(post.category) as keyof typeof Ionicons.glyphMap} size={20} color="#fff" />
-      </View>
-      <View style={styles.trendBody}>
-        <Text style={styles.trendTitle} numberOfLines={1}>{post.title}</Text>
-        <Text style={styles.trendMeta}>{post.spotName} · {post.time}</Text>
-      </View>
-      <View style={styles.trendStats}>
-        <View style={styles.statRow}>
-          <Ionicons name="star" size={12} color="#F59E0B" />
-          <Text style={styles.trendStar}>{post.likes}</Text>
-        </View>
-        {post.participants && (
-          <View style={styles.statRow}>
-            <Ionicons name="person-outline" size={11} color={Colors.textMuted} />
-            <Text style={styles.trendComment}>{post.participants}</Text>
-          </View>
-        )}
-      </View>
-      <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
-    </TouchableOpacity>
-  );
-}
-
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1, backgroundColor: '#FFFBF5' },
   header: {
-    backgroundColor: '#fff',
-    padding: 16,
+    backgroundColor: '#FFF7ED',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-    gap: 12,
+    borderBottomColor: '#FED7AA',
+    gap: 10,
   },
-  title: { fontSize: 22, fontWeight: '700', color: Colors.textPrimary },
-  searchRow: {
+  headerTop: {
+    gap: 2,
+  },
+  headerTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surfaceSecondary,
-    borderRadius: 12,
-    paddingHorizontal: 12,
     gap: 8,
   },
-  input: { flex: 1, height: 44, fontSize: 14, color: Colors.textPrimary },
-  content: { padding: 16, gap: 24, paddingBottom: 32 },
-  resultsHeader: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary, marginBottom: 4 },
-  section: { gap: 10 },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  sectionIconBox: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: Colors.textPrimary },
-  trendItem: {
+  headerIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    backgroundColor: '#E97316',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  title: { fontSize: 20, fontWeight: '800', color: '#7C2D12' },
+  headerSub: { fontSize: 11, color: '#C2410C', marginLeft: 38 },
+  statsRow: {
+    gap: 8,
+    paddingVertical: 2,
+  },
+  statChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    padding: 12,
+    gap: 4,
     backgroundColor: '#fff',
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#FDBA74',
   },
-  trendIconBox: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  trendBody: { flex: 1, gap: 2 },
-  trendTitle: { fontSize: 13, fontWeight: '700', color: Colors.textPrimary },
-  trendMeta: { fontSize: 11, color: Colors.textSecondary },
-  trendStats: { alignItems: 'flex-end', gap: 4, flexShrink: 0 },
-  statRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  trendLike: { fontSize: 11, color: '#EF4444', fontWeight: '600' },
-  trendStar: { fontSize: 11, color: '#F59E0B', fontWeight: '600' },
-  trendComment: { fontSize: 11, color: Colors.textMuted },
-  categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  categoryCard: { width: '47%', borderRadius: 12, padding: 16, gap: 4 },
-  categoryIcon: { marginBottom: 4 },
-  categoryLabel: { fontSize: 16, fontWeight: '700', color: '#fff' },
-  categoryCount: { fontSize: 11, color: 'rgba(255,255,255,0.8)' },
+  statDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  statLabel: { fontSize: 11, color: Colors.textSecondary, fontWeight: '500' },
+  statCount: { fontSize: 12, fontWeight: '700' },
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  tabItem: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 10,
+    gap: 2,
+    position: 'relative',
+  },
+  tabItemActive: {},
+  tabLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.textMuted,
+  },
+  tabLabelActive: {
+    color: '#E97316',
+    fontWeight: '700',
+  },
+  tabIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    left: '20%',
+    right: '20%',
+    height: 2.5,
+    borderRadius: 2,
+    backgroundColor: '#E97316',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  sectionIconBox: {
+    width: 26,
+    height: 26,
+    borderRadius: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    flex: 1,
+  },
+  sectionBadge: {
+    backgroundColor: '#FFF7ED',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#FDBA74',
+  },
+  sectionBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#E97316',
+  },
+  listContent: {
+    padding: 16,
+    paddingBottom: 32,
+  },
+  centerBox: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  loadingText: { fontSize: 13, color: Colors.textSecondary },
+  errorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    margin: 16,
+    padding: 12,
+    borderRadius: 10,
+    backgroundColor: '#FEF2F2',
+  },
+  errorText: { flex: 1, fontSize: 13, color: '#991B1B' },
+  emptyBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 56,
+    gap: 8,
+  },
+  emptyTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  emptyText: { fontSize: 13, color: Colors.textMuted },
 });

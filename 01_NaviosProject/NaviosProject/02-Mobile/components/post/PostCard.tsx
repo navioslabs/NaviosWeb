@@ -1,14 +1,12 @@
-/**
- * PostCard - 近く画面のホットカード（横スクロール用）
- * mock.jsx: ボトムシート内の横スクロールカード
- */
-import React from 'react';
-import { TouchableOpacity, View, Text, StyleSheet } from 'react-native';
+﻿import React from 'react';
+import { TouchableOpacity, View, Text, StyleSheet, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Post } from '../../types';
 import { getCategoryInfo, getCategoryIconName } from '../../constants/categories';
 import { formatDistance, getExpiryLabel } from '../../lib/utils';
 import { Colors } from '../../constants/colors';
+
+export const CARD_WIDTH = Math.floor(Dimensions.get('window').width * 0.42);
 
 type Props = {
   post: Post;
@@ -25,25 +23,24 @@ export default function PostCard({ post, isSelected, onPress }: Props) {
     <TouchableOpacity
       style={[styles.card, isSelected && styles.cardSelected, { borderColor: isSelected ? cat.color : Colors.border }]}
       onPress={() => onPress(post)}
-      activeOpacity={0.8}
+      activeOpacity={0.82}
     >
-      {/* カテゴリアイコン + バッジ */}
       <View style={styles.header}>
         <View style={[styles.categoryIconBox, { backgroundColor: cat.color }]}>
           <Ionicons name={iconName} size={13} color="#fff" />
         </View>
-        {post.urgency === 'high' && <Text style={styles.urgencyBadge}>急</Text>}
-        {post.author.verified && <Ionicons name="checkmark-circle" size={14} color="#3B82F6" />}
+        {post.urgency === 'high' ? <Text style={styles.urgencyBadge}>急ぎ</Text> : null}
+        {post.author.verified ? <Ionicons name="checkmark-circle" size={14} color="#3B82F6" /> : null}
       </View>
 
-      <Text style={styles.title} numberOfLines={2}>{post.title}</Text>
+      <Text style={styles.title} numberOfLines={2} ellipsizeMode="tail">{post.title}</Text>
 
-      {expiryLabel && (
+      {expiryLabel ? (
         <View style={styles.expiryRow}>
           <Ionicons name="time-outline" size={10} color={cat.color} />
-          <Text style={[styles.expiryText, { color: cat.color }]}>{expiryLabel}</Text>
+          <Text style={[styles.expiryText, { color: cat.color }]} numberOfLines={1}>{expiryLabel}</Text>
         </View>
-      )}
+      ) : null}
 
       <View style={styles.placeRow}>
         <Ionicons name="location-outline" size={10} color={Colors.textSecondary} />
@@ -52,7 +49,7 @@ export default function PostCard({ post, isSelected, onPress }: Props) {
 
       <View style={styles.footer}>
         <Text style={[styles.distance, { color: cat.color }]}>{formatDistance(post.distance)}</Text>
-        <Text style={styles.time}>{post.createdAt}</Text>
+        <Text style={styles.time} numberOfLines={1}>{post.createdAt}</Text>
       </View>
     </TouchableOpacity>
   );
@@ -60,14 +57,20 @@ export default function PostCard({ post, isSelected, onPress }: Props) {
 
 const styles = StyleSheet.create({
   card: {
-    width: 160,
+    width: CARD_WIDTH,
+    minHeight: 162,
     padding: 12,
     borderRadius: 12,
     borderWidth: 2,
     backgroundColor: '#fff',
+    justifyContent: 'space-between',
   },
   cardSelected: {
-    // borderColor set dynamically
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 4,
   },
   header: {
     flexDirection: 'row',
@@ -91,6 +94,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: Colors.textPrimary,
+    lineHeight: 17,
+    minHeight: 34,
     marginBottom: 6,
   },
   placeRow: {
@@ -107,8 +112,9 @@ const styles = StyleSheet.create({
   footer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'space-between',
     marginTop: 2,
+    gap: 8,
   },
   distance: {
     fontSize: 10,
@@ -117,15 +123,19 @@ const styles = StyleSheet.create({
   time: {
     fontSize: 10,
     color: Colors.textMuted,
+    flexShrink: 1,
+    textAlign: 'right',
   },
   expiryRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
     marginBottom: 4,
+    minHeight: 14,
   },
   expiryText: {
     fontSize: 10,
     fontWeight: '600',
+    flex: 1,
   },
 });

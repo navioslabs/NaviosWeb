@@ -1,8 +1,4 @@
-/**
- * PostListItem - 投稿一覧の行アイテム
- * mock.jsx: ボトムシート全展開時のリスト、検索結果リスト
- */
-import React from 'react';
+﻿import React from 'react';
 import { TouchableOpacity, View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Post } from '../../types';
@@ -13,7 +9,7 @@ import { Colors } from '../../constants/colors';
 type Props = {
   post: Post;
   onPress: (post: Post) => void;
-  showMatchScore?: number; // Pulse検索結果用
+  showMatchScore?: number;
 };
 
 export default function PostListItem({ post, onPress, showMatchScore }: Props) {
@@ -22,37 +18,35 @@ export default function PostListItem({ post, onPress, showMatchScore }: Props) {
 
   return (
     <TouchableOpacity style={styles.container} onPress={() => onPress(post)} activeOpacity={0.7}>
-      {/* カテゴリアイコン */}
       <View style={[styles.iconBox, { backgroundColor: cat.color }]}>
         <Ionicons name={getCategoryIconName(post.category) as keyof typeof Ionicons.glyphMap} size={20} color="#fff" />
       </View>
 
-      {/* テキスト */}
       <View style={styles.body}>
         <View style={styles.titleRow}>
           <Text style={styles.title} numberOfLines={1}>{post.title}</Text>
-          {showMatchScore !== undefined && (
+          {showMatchScore !== undefined ? (
             <View style={styles.scoreBadge}>
               <Text style={styles.scoreText}>{showMatchScore}%</Text>
             </View>
-          )}
+          ) : null}
         </View>
-        {showMatchScore !== undefined && (
+        {showMatchScore !== undefined ? (
           <Text style={styles.content} numberOfLines={2}>{post.content}</Text>
-        )}
+        ) : null}
         <View style={styles.meta}>
           <Text style={[styles.distance, { color: cat.color }]}>{formatDistance(post.distance)}</Text>
-          <Text style={styles.dot}>·</Text>
+          <Text style={styles.dot}>・</Text>
           <Text style={styles.metaText}>{post.author.displayName}</Text>
-          <Text style={styles.dot}>·</Text>
+          <Text style={styles.dot}>・</Text>
           <Text style={styles.metaText}>{post.createdAt}</Text>
-          {expiryLabel && (
+          {expiryLabel ? (
             <>
-              <Text style={styles.dot}>·</Text>
+              <Text style={styles.dot}>・</Text>
               <Ionicons name="time-outline" size={10} color={cat.color} />
               <Text style={[styles.metaText, { color: cat.color, fontWeight: '600' }]}>{expiryLabel}</Text>
             </>
-          )}
+          ) : null}
         </View>
       </View>
 
@@ -114,6 +108,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     marginTop: 2,
+    flexWrap: 'wrap',
   },
   distance: {
     fontSize: 11,

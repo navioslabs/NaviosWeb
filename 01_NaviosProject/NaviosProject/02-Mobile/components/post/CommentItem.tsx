@@ -1,8 +1,4 @@
-/**
- * CommentItem - コメント1件の表示
- * mock.jsx: 投稿詳細画面のコメントリスト
- */
-import React from 'react';
+﻿import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Comment } from '../../types';
 import UserAvatar from '../common/UserAvatar';
@@ -19,11 +15,11 @@ export default function CommentItem({ comment }: Props) {
       <View style={styles.bubble}>
         <View style={styles.header}>
           <Text style={styles.name}>{comment.author.displayName}</Text>
-          {comment.canHelp && (
+          {comment.canHelp ? (
             <View style={styles.helpBadge}>
-              <Text style={styles.helpText}>協力可</Text>
+              <Text style={styles.helpText}>協力できます</Text>
             </View>
-          )}
+          ) : null}
           <Text style={styles.time}>{comment.createdAt}</Text>
         </View>
         <Text style={styles.content}>{comment.content}</Text>

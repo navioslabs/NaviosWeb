@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import type { LocationObjectCoords } from 'expo-location';
 import * as Location from 'expo-location';
 
@@ -11,15 +11,16 @@ export function useLocation() {
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        setError('位置情報の権限が許可されていません');
+        setError('位置情報の利用が許可されていません。設定から許可してください。');
         setLoading(false);
         return;
       }
+
       const location = await Location.getCurrentPositionAsync({});
       setCoords(location.coords);
       setLoading(false);
     })().catch((e) => {
-      setError(e instanceof Error ? e.message : '位置情報の取得に失敗しました');
+      setError(e instanceof Error ? e.message : '現在地を取得できませんでした。位置情報設定をご確認ください。');
       setLoading(false);
     });
   }, []);

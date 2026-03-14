@@ -1,8 +1,4 @@
-/**
- * DetailScreen - 投稿詳細画面
- * mock.jsx: view === 'detail' の画面
- */
-import React, { useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -14,51 +10,175 @@ import {
   Linking,
   Share,
   Animated,
+  ActivityIndicator,
+  Alert,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import * as Haptics from 'expo-haptics';
 import UserAvatar from '../../components/common/UserAvatar';
 import CategoryBadge from '../../components/common/CategoryBadge';
-import CategoryDetailCard from '../../components/post/CategoryDetailCard';
 import CommentItem from '../../components/post/CommentItem';
 import { formatDistance, getWalkTime } from '../../lib/utils';
 import { CATEGORY_ACTIONS } from '../../constants/categories';
 import { Colors } from '../../constants/colors';
-import { MOCK_COMMENTS, MOCK_POSTS } from '../../lib/mockData';
+import { useAuth } from '../../hooks/useAuth';
+import type { Comment, Post } from '../../types';
+import {
+  createComment,
+  fetchCommentsByPostId,
+  fetchPostById,
+  toggleLike,
+  checkUserLiked,
+  endPost,
+  deletePost,
+} from '../../lib/postService';
 
-const PAGE_SIZE = 3;
+const PAGE_SIZE = 5;
 
 export default function DetailScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const post = MOCK_POSTS.find((p) => p.id === id) ?? MOCK_POSTS[0];
+  const { id } = useLocalSearchParams<{ id?: string | string[] }>();
+  const postId = Array.isArray(id) ? id[0] : id;
+  const { user } = useAuth();
+
+  const [post, setPost] = useState<Post | null>(null);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [loadingMoreComments, setLoadingMoreComments] = useState(false);
   const [commentText, setCommentText] = useState('');
+  const [submittingComment, setSubmittingComment] = useState(false);
+
   const [liked, setLiked] = useState(false);
-  const [likeCount, setLikeCount] = useState(post.likeCount ?? 0);
+  const [likeCount, setLikeCount] = useState(0);
+  const [likingInProgress, setLikingInProgress] = useState(false);
   const likeScale = useRef(new Animated.Value(1)).current;
-  const comments = MOCK_COMMENTS.slice(0, visibleCount);
-  const remaining = MOCK_COMMENTS.length - visibleCount;
-  const action = CATEGORY_ACTIONS[post.category];
+
+  useEffect(() => {
+    const load = async () => {
+      if (!postId) {
+        setError('Invalid post id.');
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      setError(null);
+
+      try {
+        const [postData, commentData] = await Promise.all([
+          fetchPostById(postId),
+          fetchCommentsByPostId(postId),
+        ]);
+
+        if (!postData) {
+          setError('Post not found.');
+          setPost(null);
+          setComments([]);
+          return;
+        }
+
+        setPost(postData);
+        setComments(commentData);
+        setLikeCount(postData.likeCount ?? 0);
+
+        // Check if user has liked this post
+        if (user) {
+          const userLiked = await checkUserLiked(postId, user.id);
+          setLiked(userLiked);
+        }
+      } catch (loadError) {
+        const message = loadError instanceof Error ? loadError.message : 'Failed to load post.';
+        setError(message);
+        setPost(null);
+        setComments([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    load();
+  }, [postId, user]);
+
+  const displayedComments = useMemo(() => comments.slice(0, visibleCount), [comments, visibleCount]);
+  const hasMoreComments = comments.length > visibleCount;
+
+  const handleLoadMoreComments = useCallback(() => {
+    if (!hasMoreComments || loadingMoreComments) return;
+    setLoadingMoreComments(true);
+    // Simulate a brief delay for UX smoothness
+    setTimeout(() => {
+      setVisibleCount((n) => n + PAGE_SIZE);
+      setLoadingMoreComments(false);
+    }, 300);
+  }, [hasMoreComments, loadingMoreComments]);
+
+  const handleScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+      const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
+      if (distanceFromBottom < 200 && hasMoreComments && !loadingMoreComments) {
+        handleLoadMoreComments();
+      }
+    },
+    [hasMoreComments, loadingMoreComments, handleLoadMoreComments],
+  );
 
   const handleNavigate = () => {
+    if (!post) return;
     const { latitude, longitude } = post.place;
+    if (!latitude || !longitude) {
+      Alert.alert('場所情報がありません');
+      return;
+    }
     const url = `https://maps.google.com/?daddr=${latitude},${longitude}`;
     Linking.openURL(url).catch(() => {});
   };
 
-  const handleLike = () => {
-    const next = !liked;
-    setLiked(next);
-    setLikeCount((n) => n + (next ? 1 : -1));
+  const handleLike = async () => {
+    if (!post || !postId) return;
+    if (!user) {
+      Alert.alert('ログインが必要です', 'いいねするにはログインしてください。');
+      return;
+    }
+    if (likingInProgress) return;
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    // Optimistic update
+    const prevLiked = liked;
+    const prevCount = likeCount;
+    setLiked(!prevLiked);
+    setLikeCount(prevCount + (prevLiked ? -1 : 1));
+
     Animated.sequence([
       Animated.timing(likeScale, { toValue: 1.4, duration: 120, useNativeDriver: true }),
-      Animated.timing(likeScale, { toValue: 1,   duration: 120, useNativeDriver: true }),
+      Animated.timing(likeScale, { toValue: 1, duration: 120, useNativeDriver: true }),
     ]).start();
+
+    setLikingInProgress(true);
+    try {
+      const result = await toggleLike(postId, user.id);
+      setLiked(result.liked);
+      setLikeCount(result.count);
+    } catch {
+      // Revert optimistic update on error
+      setLiked(prevLiked);
+      setLikeCount(prevCount);
+    } finally {
+      setLikingInProgress(false);
+    }
   };
 
   const handleShare = () => {
+    if (!post) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     Share.share({
       title: post.title,
       message: `${post.title}\n${post.place.name} - ${post.place.address}`,
@@ -66,59 +186,191 @@ export default function DetailScreen() {
   };
 
   const handleActionPress = () => {
+    if (!post) return;
     if (post.category === 'stock' && post.author.phone) {
       Linking.openURL(`tel:${post.author.phone}`).catch(() => {});
     }
   };
 
+  const handleSendComment = async () => {
+    if (!post || !postId) return;
+    if (!post.allowComments) return;
+
+    const content = commentText.trim();
+    if (!content) return;
+
+    if (!user) {
+      Alert.alert('ログインが必要です', 'コメントするにはログインしてください。');
+      return;
+    }
+
+    setSubmittingComment(true);
+    try {
+      const inserted = await createComment({
+        postId,
+        authorId: user.id,
+        content,
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setComments((prev) => [inserted, ...prev]);
+      setCommentText('');
+      setPost((prev) => (prev ? { ...prev, commentCount: prev.commentCount + 1 } : prev));
+    } catch (submitError) {
+      const message = submitError instanceof Error ? submitError.message : 'Failed to send comment.';
+      Alert.alert('コメント送信に失敗しました', message);
+    } finally {
+      setSubmittingComment(false);
+    }
+  };
+
+  const handlePostMenu = () => {
+    if (!post || !postId || !user) return;
+    Alert.alert(
+      '投稿の管理',
+      undefined,
+      [
+        {
+          text: '投稿を終了する',
+          onPress: () => {
+            Alert.alert(
+              '投稿を終了しますか？',
+              'この投稿は終了済みとして表示されます。',
+              [
+                { text: 'キャンセル', style: 'cancel' },
+                {
+                  text: '終了する',
+                  style: 'destructive',
+                  onPress: async () => {
+                    try {
+                      await endPost(postId);
+                      setPost((prev) => (prev ? { ...prev, isEnded: true } : prev));
+                      Alert.alert('投稿を終了しました');
+                    } catch {
+                      Alert.alert('エラー', '投稿の終了に失敗しました。');
+                    }
+                  },
+                },
+              ],
+            );
+          },
+        },
+        {
+          text: '投稿を削除する',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              '投稿を削除しますか？',
+              'この操作は取り消せません。',
+              [
+                { text: 'キャンセル', style: 'cancel' },
+                {
+                  text: '削除する',
+                  style: 'destructive',
+                  onPress: async () => {
+                    try {
+                      await deletePost(postId);
+                      Alert.alert('投稿を削除しました');
+                      router.back();
+                    } catch {
+                      Alert.alert('エラー', '投稿の削除に失敗しました。');
+                    }
+                  },
+                },
+              ],
+            );
+          },
+        },
+        { text: 'キャンセル', style: 'cancel' },
+      ],
+    );
+  };
+
+  const isOwnPost = post && user && post.author.id === user.id;
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.centerContainer}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+        <Text style={styles.centerText}>読み込み中...</Text>
+      </SafeAreaView>
+    );
+  }
+
+  if (error || !post) {
+    return (
+      <SafeAreaView style={styles.centerContainer}>
+        <Ionicons name="alert-circle-outline" size={40} color={Colors.danger} />
+        <Text style={styles.centerText}>{error ?? '投稿が見つかりません'}</Text>
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <Text style={styles.backButtonText}>戻る</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
+  const action = CATEGORY_ACTIONS[post.category];
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      {/* ヘッダー */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
           <Ionicons name="chevron-back" size={26} color={Colors.textPrimary} />
         </TouchableOpacity>
         <CategoryBadge categoryId={post.category} />
-        <TouchableOpacity style={styles.headerButton} onPress={handleShare}>
-          <Ionicons name="share-social-outline" size={22} color={Colors.textPrimary} />
-        </TouchableOpacity>
+        <View style={styles.headerRight}>
+          {isOwnPost ? (
+            <TouchableOpacity style={styles.headerButton} onPress={handlePostMenu}>
+              <Ionicons name="ellipsis-horizontal" size={22} color={Colors.textPrimary} />
+            </TouchableOpacity>
+          ) : null}
+          <TouchableOpacity style={styles.headerButton} onPress={handleShare}>
+            <Ionicons name="share-social-outline" size={22} color={Colors.textPrimary} />
+          </TouchableOpacity>
+        </View>
       </View>
 
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
-        {/* 画像 */}
-        {post.images.length > 0 && (
-          <Image source={{ uri: post.images[0] }} style={styles.image} />
-        )}
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        onScroll={handleScroll}
+        scrollEventThrottle={400}
+      >
+        {post.images.length > 0 ? <Image source={{ uri: post.images[0] }} style={styles.image} /> : null}
 
         <View style={styles.body}>
-          {/* タイトル・投稿者 */}
           <Text style={styles.postTitle}>{post.title}</Text>
           <View style={styles.authorRow}>
             <UserAvatar avatar={post.author.avatar} size={32} />
             <View>
               <View style={styles.authorNameRow}>
                 <Text style={styles.authorName}>{post.author.displayName}</Text>
-                {post.author.verified && (
+                {post.author.verified ? (
                   <Ionicons name="checkmark-circle" size={14} color={Colors.primary} />
-                )}
+                ) : null}
               </View>
               <Text style={styles.time}>{post.createdAt}</Text>
             </View>
           </View>
 
-          {/* いいね・コメント数 */}
           <View style={styles.engagementRow}>
-            <TouchableOpacity style={styles.engagementBtn} onPress={handleLike} activeOpacity={0.7}>
+            <TouchableOpacity
+              style={styles.engagementBtn}
+              onPress={handleLike}
+              activeOpacity={0.7}
+              disabled={likingInProgress}
+            >
               <Animated.View style={{ transform: [{ scale: likeScale }] }}>
-                <Ionicons
-                  name={liked ? 'heart' : 'heart-outline'}
-                  size={20}
-                  color={liked ? '#F43F5E' : Colors.textSecondary}
-                />
+                {likingInProgress ? (
+                  <ActivityIndicator size="small" color={liked ? '#F43F5E' : Colors.textSecondary} />
+                ) : (
+                  <Ionicons
+                    name={liked ? 'heart' : 'heart-outline'}
+                    size={20}
+                    color={liked ? '#F43F5E' : Colors.textSecondary}
+                  />
+                )}
               </Animated.View>
-              <Text style={[styles.engagementCount, liked && styles.engagementCountLiked]}>
-                {likeCount}
-              </Text>
+              <Text style={[styles.engagementCount, liked && styles.engagementCountLiked]}>{likeCount}</Text>
               <Text style={styles.engagementLabel}>いいね</Text>
             </TouchableOpacity>
             <View style={styles.engagementDivider} />
@@ -134,7 +386,6 @@ export default function DetailScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* 場所情報 */}
           <View style={styles.placeCard}>
             <View style={styles.placeIconBox}>
               <Ionicons name="location-outline" size={20} color={Colors.primary} />
@@ -144,54 +395,56 @@ export default function DetailScreen() {
               <Text style={styles.placeAddress}>{post.place.address}</Text>
             </View>
             <View style={styles.placeDistance}>
-              <Text style={[styles.distanceText, { color: Colors.primary }]}>
-                {formatDistance(post.distance)}
-              </Text>
+              <Text style={[styles.distanceText, { color: Colors.primary }]}>{formatDistance(post.distance)}</Text>
               <Text style={styles.walkText}>{getWalkTime(post.distance)}</Text>
             </View>
           </View>
 
-          {/* 本文 */}
           <Text style={styles.content}>{post.content}</Text>
+          <InlineCategoryDetails post={post} />
 
-          {/* カテゴリ別詳細 */}
-          <CategoryDetailCard post={post} />
-
-          {/* コメント */}
           <View style={styles.commentsSection}>
             <View style={styles.commentsTitleRow}>
               <Ionicons name="chatbubble-outline" size={16} color={Colors.textPrimary} />
-              <Text style={styles.commentsTitle}>コメント ({MOCK_COMMENTS.length})</Text>
+              <Text style={styles.commentsTitle}>コメント ({comments.length})</Text>
             </View>
             <View style={styles.commentList}>
-              {comments.map((comment) => (
+              {displayedComments.map((comment) => (
                 <CommentItem key={comment.id} comment={comment} />
               ))}
             </View>
-            {remaining > 0 && (
-              <TouchableOpacity
-                style={styles.loadMoreButton}
-                onPress={() => setVisibleCount((n) => n + PAGE_SIZE)}
-              >
-                <Text style={styles.loadMoreText}>もっと見る（残り{remaining}件）</Text>
-              </TouchableOpacity>
-            )}
+            {loadingMoreComments ? (
+              <View style={styles.loadMoreSpinner}>
+                <ActivityIndicator size="small" color={Colors.primary} />
+              </View>
+            ) : null}
           </View>
         </View>
       </ScrollView>
 
-      {/* コメント入力 + アクションボタン */}
       <View style={styles.footer}>
         <View style={styles.commentInputRow}>
           <TextInput
             style={styles.commentInput}
             value={commentText}
             onChangeText={setCommentText}
-            placeholder="コメントを入力..."
+            placeholder={post.allowComments ? 'コメントを入力...' : 'コメントは無効です'}
             placeholderTextColor={Colors.textMuted}
+            editable={post.allowComments && !submittingComment}
           />
-          <TouchableOpacity style={styles.sendButton}>
-            <Ionicons name="send" size={16} color="#fff" />
+          <TouchableOpacity
+            style={[
+              styles.sendButton,
+              (!post.allowComments || submittingComment || !commentText.trim()) && styles.sendButtonDisabled,
+            ]}
+            onPress={handleSendComment}
+            disabled={!post.allowComments || submittingComment || !commentText.trim()}
+          >
+            {submittingComment ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Ionicons name="send" size={16} color="#fff" />
+            )}
           </TouchableOpacity>
         </View>
 
@@ -212,8 +465,87 @@ export default function DetailScreen() {
   );
 }
 
+function InlineCategoryDetails({ post }: { post: Post }) {
+  const d = post.details;
+  if (!d) return null;
+
+  const Row = ({ label, value }: { label: string; value?: string }) => {
+    if (!value) return null;
+    return (
+      <View style={styles.inlineRow}>
+        <Text style={styles.inlineLabel}>{label}</Text>
+        <Text style={styles.inlineValue}>{value}</Text>
+      </View>
+    );
+  };
+
+  if (post.category === 'stock') {
+    return (
+      <View style={styles.inlineCard}>
+        <Row label="価格" value={d.price} />
+        <Row label="在庫状況" value={d.stockStatus} />
+      </View>
+    );
+  }
+
+  if (post.category === 'event') {
+    return (
+      <View style={styles.inlineCard}>
+        <Row label="日時" value={`${d.eventDate ?? ''} ${d.eventTime ?? ''}`.trim()} />
+        <Row label="参加費" value={d.fee} />
+        {d.maxParticipants ? (
+          <Row label="参加人数" value={`${d.currentParticipants ?? 0}/${d.maxParticipants}人`} />
+        ) : null}
+      </View>
+    );
+  }
+
+  if (post.category === 'help') {
+    return (
+      <View style={styles.inlineCard}>
+        <Row label="お礼" value={d.reward} />
+        <Row label="目安時間" value={d.estimatedTime} />
+      </View>
+    );
+  }
+
+  if (post.category === 'admin') {
+    return (
+      <View style={styles.inlineCard}>
+        <Row label="締切" value={d.deadline} />
+        {d.requirements && d.requirements.length > 0 ? (
+          <View style={styles.inlineRequirements}>
+            <Text style={styles.inlineLabel}>必要なもの</Text>
+            {d.requirements.map((req, i) => (
+              <Text key={`${req}-${i}`} style={styles.inlineReqItem}>・{req}</Text>
+            ))}
+          </View>
+        ) : null}
+      </View>
+    );
+  }
+
+  return null;
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
+  centerContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    padding: 20,
+    backgroundColor: '#fff',
+  },
+  centerText: { fontSize: 14, color: Colors.textSecondary, textAlign: 'center' },
+  backButton: {
+    backgroundColor: Colors.surfaceSecondary,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  backButtonText: { fontSize: 13, color: Colors.textPrimary, fontWeight: '600' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -224,6 +556,7 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border,
   },
   headerButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  headerRight: { flexDirection: 'row', alignItems: 'center' },
   scroll: { flex: 1 },
   scrollContent: { paddingBottom: 8 },
   image: { width: '100%', height: 192, resizeMode: 'cover' },
@@ -248,11 +581,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 2,
-    elevation: 1,
   },
   placeInfo: { flex: 1 },
   placeName: { fontSize: 14, fontWeight: '600', color: Colors.textPrimary },
@@ -265,8 +593,7 @@ const styles = StyleSheet.create({
   commentsTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   commentsTitle: { fontSize: 16, fontWeight: '700', color: Colors.textPrimary },
   commentList: { gap: 12 },
-  loadMoreButton: { padding: 10, alignItems: 'center' },
-  loadMoreText: { fontSize: 13, color: Colors.primary, fontWeight: '600' },
+  loadMoreSpinner: { padding: 10, alignItems: 'center' },
   footer: {
     padding: 12,
     paddingBottom: 4,
@@ -291,6 +618,9 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  sendButtonDisabled: {
+    opacity: 0.6,
   },
   actionRow: { flexDirection: 'row', gap: 10 },
   navButton: {
@@ -337,5 +667,35 @@ const styles = StyleSheet.create({
   engagementLabel: {
     fontSize: 12,
     color: Colors.textSecondary,
+  },
+  inlineCard: {
+    backgroundColor: Colors.surfaceSecondary,
+    borderRadius: 12,
+    padding: 12,
+    gap: 8,
+  },
+  inlineRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  inlineLabel: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    fontWeight: '600',
+  },
+  inlineValue: {
+    flexShrink: 1,
+    textAlign: 'right',
+    fontSize: 13,
+    color: Colors.textPrimary,
+    fontWeight: '700',
+  },
+  inlineRequirements: {
+    gap: 4,
+  },
+  inlineReqItem: {
+    fontSize: 12,
+    color: Colors.textPrimary,
   },
 });

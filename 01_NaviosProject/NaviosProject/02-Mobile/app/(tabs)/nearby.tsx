@@ -1,9 +1,4 @@
-/**
- * NearbyScreen - 近く（地図）画面
- * mock.jsx: view === 'main' の画面
- * 地図 + ボトムシート（ホットカード / 投稿リスト）
- */
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -14,31 +9,28 @@ import {
   Dimensions,
   Animated,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { CategoryId, getCategoryInfo, getCategoryIconName } from '../../constants/categories';
+import { CATEGORIES, CategoryId, getCategoryInfo, getCategoryIconName } from '../../constants/categories';
 import { Post } from '../../types';
-import CategoryFilter from '../../components/common/CategoryFilter';
 import PostCard from '../../components/post/PostCard';
 import PostListItem from '../../components/post/PostListItem';
 import { Colors } from '../../constants/colors';
-import { MOCK_POSTS } from '../../lib/mockData';
+import { formatDistance } from '../../lib/utils';
+import { useNearbyPosts } from '../../hooks/useNearbyPosts';
+import { usePosts } from '../../hooks/usePosts';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 type SheetState = 'closed' | 'half' | 'full';
 
-/** ボトムシートの最大高さ */
-const MAX_SHEET_HEIGHT = SCREEN_HEIGHT * 0.62;
-
-/** 各状態で translateY する量（sheet 高さ - 表示したい高さ） */
+const MAX_SHEET_HEIGHT = SCREEN_HEIGHT * 0.64;
 const SHEET_TRANSLATE: Record<SheetState, number> = {
   closed: MAX_SHEET_HEIGHT - 70,
-  half:   MAX_SHEET_HEIGHT - 220,
-  full:   0,
+  half: MAX_SHEET_HEIGHT - 260,
+  full: 0,
 };
 
-/** mock.jsx の pinPositions と同じ配置 */
 const PIN_POSITIONS = [
   { top: '22%', left: '25%' },
   { top: '30%', left: '68%' },
@@ -52,50 +44,95 @@ const PIN_POSITIONS = [
 
 export default function NearbyScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { category: initialCategory } = useLocalSearchParams<{ category?: string }>();
-  const [activeCategory, setActiveCategory] = useState<CategoryId | 'all'>(
-    (initialCategory as CategoryId) ?? 'all'
-  );
+  const [activeCategory, setActiveCategory] = useState<CategoryId | 'all'>((initialCategory as CategoryId) ?? 'all');
+
+  const { posts: allPosts } = usePosts();
+  const { posts: sourcePosts, loading: postsLoading, error: postsError, warning: postsWarning } = useNearbyPosts({
+    category: activeCategory,
+  });
+
   const [sheetState, setSheetState] = useState<SheetState>('half');
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
 
-  // ─── ロゴ点滅アニメーション ───────────────────────────
+  // Floating preview card animation
+  const FLOAT_CARD_HEIGHT = 120;
+  const floatTranslateY = useRef(new Animated.Value(FLOAT_CARD_HEIGHT + 20)).current;
+  const floatVisible = useRef(false);
+
+  const showFloatingCard = useCallback((post: Post) => {
+    if (floatVisible.current && selectedPost?.id !== post.id) {
+      // Slide out, swap, slide in
+      Animated.timing(floatTranslateY, {
+        toValue: FLOAT_CARD_HEIGHT + 20,
+        duration: 150,
+        useNativeDriver: true,
+      }).start(() => {
+        setSelectedPost(post);
+        Animated.spring(floatTranslateY, {
+          toValue: 0,
+          useNativeDriver: true,
+          tension: 80,
+          friction: 12,
+        }).start();
+      });
+    } else if (!floatVisible.current) {
+      setSelectedPost(post);
+      floatVisible.current = true;
+      Animated.spring(floatTranslateY, {
+        toValue: 0,
+        useNativeDriver: true,
+        tension: 80,
+        friction: 12,
+      }).start();
+    }
+  }, [selectedPost, floatTranslateY]);
+
+  const hideFloatingCard = useCallback(() => {
+    Animated.timing(floatTranslateY, {
+      toValue: FLOAT_CARD_HEIGHT + 20,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(() => {
+      floatVisible.current = false;
+      setSelectedPost(null);
+    });
+  }, [floatTranslateY]);
+
   const dotOpacity = useRef(new Animated.Value(1)).current;
   useEffect(() => {
     const blink = Animated.loop(
       Animated.sequence([
         Animated.timing(dotOpacity, { toValue: 0, duration: 1200, useNativeDriver: true }),
         Animated.timing(dotOpacity, { toValue: 1, duration: 1200, useNativeDriver: true }),
-      ])
+      ]),
     );
     blink.start();
     return () => blink.stop();
   }, [dotOpacity]);
 
-  // ─── 現在地マーカーの ping アニメーション ────────────
-  const pingScale   = useRef(new Animated.Value(1)).current;
+  const pingScale = useRef(new Animated.Value(1)).current;
   const pingOpacity = useRef(new Animated.Value(0.7)).current;
   useEffect(() => {
     const ping = Animated.loop(
       Animated.sequence([
         Animated.parallel([
-          Animated.timing(pingScale,   { toValue: 2.4, duration: 1400, useNativeDriver: true }),
-          Animated.timing(pingOpacity, { toValue: 0,   duration: 1400, useNativeDriver: true }),
+          Animated.timing(pingScale, { toValue: 2.4, duration: 1400, useNativeDriver: true }),
+          Animated.timing(pingOpacity, { toValue: 0, duration: 1400, useNativeDriver: true }),
         ]),
         Animated.parallel([
-          Animated.timing(pingScale,   { toValue: 1,   duration: 0, useNativeDriver: true }),
+          Animated.timing(pingScale, { toValue: 1, duration: 0, useNativeDriver: true }),
           Animated.timing(pingOpacity, { toValue: 0.7, duration: 0, useNativeDriver: true }),
         ]),
-      ])
+      ]),
     );
     ping.start();
     return () => ping.stop();
   }, [pingScale, pingOpacity]);
 
-  // ─── ボトムシートの translateY アニメーション ─────────
-  const sheetTranslateY = useRef(new Animated.Value(SHEET_TRANSLATE['half'])).current;
+  const sheetTranslateY = useRef(new Animated.Value(SHEET_TRANSLATE.half)).current;
 
-  /** シートの状態変更 + アニメーション */
   const animateSheet = (next: SheetState) => {
     setSheetState(next);
     Animated.timing(sheetTranslateY, {
@@ -106,77 +143,73 @@ export default function NearbyScreen() {
   };
 
   const cycleSheet = () => {
-    const next: SheetState =
-      sheetState === 'closed' ? 'half' : sheetState === 'half' ? 'full' : 'half';
+    const next: SheetState = sheetState === 'closed' ? 'half' : sheetState === 'half' ? 'full' : 'half';
     animateSheet(next);
   };
 
-  // ─── データ ─────────────────────────────────────────
-  const filtered = activeCategory === 'all'
-    ? MOCK_POSTS
-    : MOCK_POSTS.filter((p) => p.category === activeCategory);
-  const sorted   = [...filtered].sort((a, b) => a.distance - b.distance);
+  const sorted = useMemo(() => {
+    const filtered = activeCategory === 'all' ? sourcePosts : sourcePosts.filter((p) => p.category === activeCategory);
+    return [...filtered].sort((a, b) => a.distance - b.distance);
+  }, [activeCategory, sourcePosts]);
+
   const hotPosts = sorted.slice(0, 3);
 
-  const categoryCount = Object.fromEntries(
-    (['stock', 'event', 'help', 'admin'] as CategoryId[]).map((id) => [
-      id,
-      MOCK_POSTS.filter((p) => p.category === id).length,
-    ])
-  ) as Record<CategoryId, number>;
+  const categoryCount = useMemo(
+    () =>
+      Object.fromEntries(
+        (['stock', 'event', 'help', 'admin'] as CategoryId[]).map((id) => [
+          id,
+          allPosts.filter((p) => p.category === id).length,
+        ]),
+      ) as Record<CategoryId, number>,
+    [allPosts],
+  );
 
   return (
     <View style={styles.container}>
-      {/* 地図エリア（プレースホルダー） */}
-      <View style={styles.mapPlaceholder}>
-        <Text style={styles.mapText}>🗺️ 地図エリア</Text>
-        <Text style={styles.mapSubText}>MapLibre を実装予定</Text>
+      <TouchableOpacity
+        style={styles.mapPlaceholder}
+        activeOpacity={1}
+        onPress={() => { if (floatVisible.current) hideFloatingCard(); }}
+      >
+        <Text style={styles.mapText}>近くの投稿マップ</Text>
+        <Text style={styles.mapSubText}>MapLibre 本実装前のプレースホルダーです</Text>
 
-        {/* 現在地マーカー */}
         <View style={styles.locationMarker}>
-          <Animated.View style={[
-            styles.locationPing,
-            { transform: [{ scale: pingScale }], opacity: pingOpacity },
-          ]} />
+          <Animated.View
+            style={[styles.locationPing, { transform: [{ scale: pingScale }], opacity: pingOpacity }]}
+          />
           <View style={styles.locationDot}>
             <Ionicons name="navigate" size={14} color="#fff" />
           </View>
         </View>
 
-        {/* 投稿ピン */}
         {sorted.slice(0, PIN_POSITIONS.length).map((post, i) => {
-          const cat      = getCategoryInfo(post.category);
+          const cat = getCategoryInfo(post.category);
           const iconName = getCategoryIconName(post.category) as keyof typeof Ionicons.glyphMap;
-          const pos       = PIN_POSITIONS[i];
+          const pos = PIN_POSITIONS[i];
           const isSelected = selectedPost?.id === post.id;
+
           return (
             <TouchableOpacity
               key={post.id}
               style={[styles.pin, { top: pos.top, left: pos.left }]}
-              onPress={() => {
-                setSelectedPost(post);
-                if (sheetState === 'closed') animateSheet('half');
-              }}
+              onPress={() => showFloatingCard(post)}
               activeOpacity={0.85}
             >
-              <View style={[
-                styles.pinCircle,
-                { backgroundColor: cat.color },
-                isSelected && styles.pinCircleSelected,
-              ]}>
+              <View style={[styles.pinCircle, { backgroundColor: cat.color }, isSelected && styles.pinCircleSelected]}>
                 <Ionicons name={iconName} size={16} color="#fff" />
               </View>
-              {post.urgency === 'high' && (
+              {post.urgency === 'high' ? (
                 <View style={styles.pinUrgency}>
                   <Text style={styles.pinUrgencyText}>!</Text>
                 </View>
-              )}
+              ) : null}
             </TouchableOpacity>
           );
         })}
-      </View>
+      </TouchableOpacity>
 
-      {/* ヘッダー */}
       <SafeAreaView style={styles.headerContainer} edges={['top']}>
         <View style={styles.headerRow}>
           <View style={styles.logoRow}>
@@ -186,7 +219,7 @@ export default function NearbyScreen() {
           <View style={styles.headerActions}>
             <TouchableOpacity style={styles.locationChip}>
               <Ionicons name="location-sharp" size={12} color={Colors.primary} />
-              <Text style={styles.locationText}>伊集院</Text>
+              <Text style={styles.locationText}>現在地</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.bellButton}>
               <Ionicons name="notifications" size={18} color={Colors.textPrimary} />
@@ -197,17 +230,21 @@ export default function NearbyScreen() {
           </View>
         </View>
 
-        {/* カテゴリフィルター */}
-        <CategoryFilter
-          active={activeCategory}
-          onSelect={setActiveCategory}
-          counts={categoryCount}
-        />
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryContainer}>
+          <CategoryChip label="すべて" active={activeCategory === 'all'} color="#475569" onPress={() => setActiveCategory('all')} />
+          {CATEGORIES.map((cat) => (
+            <CategoryChip
+              key={cat.id}
+              label={`${cat.label} ${categoryCount[cat.id] ?? 0}`}
+              active={activeCategory === cat.id}
+              color={cat.color}
+              onPress={() => setActiveCategory(cat.id)}
+            />
+          ))}
+        </ScrollView>
       </SafeAreaView>
 
-      {/* ボトムシート（translateY アニメーション） */}
       <Animated.View style={[styles.sheet, { transform: [{ translateY: sheetTranslateY }] }]}>
-        {/* ハンドル */}
         <TouchableOpacity style={styles.handleArea} onPress={cycleSheet}>
           <View style={styles.handle} />
         </TouchableOpacity>
@@ -216,8 +253,8 @@ export default function NearbyScreen() {
           <View style={styles.closedRow}>
             <View style={styles.liveRow}>
               <View style={styles.liveDot} />
-              <Text style={styles.liveLabel}>近くの今</Text>
-              <Text style={styles.countText}>{sorted.length}件</Text>
+              <Text style={styles.liveLabel}>近くの投稿</Text>
+              <Text style={styles.countText}>{postsLoading ? '読み込み中...' : `${sorted.length}件`}</Text>
             </View>
             <Ionicons name="chevron-up" size={16} color={Colors.textMuted} />
           </View>
@@ -226,20 +263,29 @@ export default function NearbyScreen() {
             <View style={styles.sheetHeader}>
               <View style={styles.liveBadge}>
                 <View style={styles.liveDotWhite} />
-                <Text style={styles.liveBadgeText}>近くの今</Text>
+                <Text style={styles.liveBadgeText}>近くの投稿</Text>
               </View>
-              <Text style={styles.countTextSub}>{sorted.length}件の情報</Text>
+              <Text style={styles.countTextSub}>{postsLoading ? '読み込み中' : `${sorted.length}件を表示中`}</Text>
             </View>
 
-            {/* ホットカード（横スクロール） */}
+            {postsError ? (
+              <View style={styles.errorBox}>
+                <Ionicons name="alert-circle-outline" size={14} color={Colors.danger} />
+                <Text style={styles.errorText}>{postsError}</Text>
+              </View>
+            ) : null}
+
+            {postsWarning ? (
+              <View style={styles.warningBox}>
+                <Ionicons name="warning-outline" size={14} color={Colors.warning} />
+                <Text style={styles.warningText}>{postsWarning}</Text>
+              </View>
+            ) : null}
+
             <View style={styles.hotCardsWrapper}>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.hotCards}
-              >
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hotCards}>
                 {hotPosts.map((post) => (
-                  <View key={post.id} style={{ marginRight: 12 }}>
+                  <View key={post.id} style={styles.hotCardItem}>
                     <PostCard
                       post={post}
                       isSelected={selectedPost?.id === post.id}
@@ -253,23 +299,87 @@ export default function NearbyScreen() {
               </ScrollView>
             </View>
 
-            {/* 全リスト（full時のみ） */}
-            {sheetState === 'full' && (
+            {sheetState === 'full' ? (
               <FlatList
                 style={styles.fullList}
                 data={sorted}
                 keyExtractor={(item) => item.id}
-                contentContainerStyle={styles.listContent}
+                contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 86 }]}
                 ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
-                renderItem={({ item }) => (
-                  <PostListItem post={item} onPress={(p) => router.push(`/post/${p.id}`)} />
-                )}
+                renderItem={({ item }) => <PostListItem post={item} onPress={(p) => router.push(`/post/${p.id}`)} />}
               />
-            )}
+            ) : null}
           </View>
         )}
       </Animated.View>
+
+      {/* Floating preview card — slides up when a pin is selected */}
+      {selectedPost ? (
+        <Animated.View
+          style={[
+            styles.floatingCard,
+            { bottom: MAX_SHEET_HEIGHT - SHEET_TRANSLATE[sheetState] + 12, transform: [{ translateY: floatTranslateY }] },
+          ]}
+        >
+          {(() => {
+            const cat = getCategoryInfo(selectedPost.category);
+            const iconName = getCategoryIconName(selectedPost.category) as keyof typeof Ionicons.glyphMap;
+            return (
+              <TouchableOpacity
+                style={styles.floatingCardInner}
+                activeOpacity={0.9}
+                onPress={() => router.push(`/post/${selectedPost.id}`)}
+              >
+                <View style={[styles.floatingCardAccent, { backgroundColor: cat.color }]} />
+                <View style={styles.floatingCardBody}>
+                  <View style={styles.floatingCardHeader}>
+                    <View style={[styles.floatingCatIcon, { backgroundColor: cat.color }]}>
+                      <Ionicons name={iconName} size={14} color="#fff" />
+                    </View>
+                    <Text style={[styles.floatingCatLabel, { color: cat.color }]}>{cat.label}</Text>
+                    {selectedPost.urgency === 'high' ? <Text style={styles.floatingUrgency}>急ぎ</Text> : null}
+                    <TouchableOpacity onPress={hideFloatingCard} hitSlop={{ top: 12, right: 12, bottom: 12, left: 12 }} style={styles.floatingClose}>
+                      <Ionicons name="close" size={16} color={Colors.textMuted} />
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={styles.floatingTitle} numberOfLines={2}>{selectedPost.title}</Text>
+                  <View style={styles.floatingFooter}>
+                    <View style={styles.floatingFooterLeft}>
+                      <Ionicons name="location-outline" size={11} color={Colors.textSecondary} />
+                      <Text style={styles.floatingPlace} numberOfLines={1}>{selectedPost.place.name}</Text>
+                    </View>
+                    <Text style={[styles.floatingDist, { color: cat.color }]}>{formatDistance(selectedPost.distance)}</Text>
+                    <Ionicons name="chevron-forward" size={14} color={Colors.textMuted} />
+                  </View>
+                </View>
+              </TouchableOpacity>
+            );
+          })()}
+        </Animated.View>
+      ) : null}
     </View>
+  );
+}
+
+function CategoryChip({
+  label,
+  active,
+  color,
+  onPress,
+}: {
+  label: string;
+  active: boolean;
+  color: string;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      style={[styles.categoryChip, active ? { backgroundColor: color } : styles.categoryChipInactive]}
+      activeOpacity={0.75}
+    >
+      <Text style={[styles.categoryChipLabel, active && styles.categoryChipLabelActive]}>{label}</Text>
+    </TouchableOpacity>
   );
 }
 
@@ -277,7 +387,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  // ─── 地図 ─────────────────────────────────────────────
   mapPlaceholder: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: '#D1FAE5',
@@ -285,14 +394,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   mapText: {
-    fontSize: 32,
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#065F46',
     marginBottom: 8,
   },
   mapSubText: {
     fontSize: 13,
     color: Colors.textSecondary,
   },
-  // ─── 現在地マーカー ────────────────────────────────────
   locationMarker: {
     position: 'absolute',
     top: '50%',
@@ -324,7 +434,6 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 6,
   },
-  // ─── 投稿ピン ──────────────────────────────────────────
   pin: {
     position: 'absolute',
     marginLeft: -18,
@@ -367,7 +476,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '700',
   },
-  // ─── ヘッダー ──────────────────────────────────────────
   headerContainer: {
     position: 'absolute',
     top: 0,
@@ -448,7 +556,26 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '700',
   },
-  // ─── ボトムシート ──────────────────────────────────────
+  categoryContainer: {
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  categoryChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+  },
+  categoryChipInactive: {
+    backgroundColor: 'rgba(255,255,255,0.95)',
+  },
+  categoryChipLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+  categoryChipLabelActive: {
+    color: '#fff',
+  },
   sheet: {
     position: 'absolute',
     bottom: 0,
@@ -531,16 +658,56 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.textMuted,
   },
+  errorBox: {
+    marginHorizontal: 16,
+    marginBottom: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  errorText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#991B1B',
+  },
+  warningBox: {
+    marginHorizontal: 16,
+    marginBottom: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  warningText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#92400E',
+  },
   sheetContent: {
     flex: 1,
   },
   hotCardsWrapper: {
-    height: 145,
+    height: 184,
     flexShrink: 0,
   },
   hotCards: {
     paddingHorizontal: 16,
     alignItems: 'flex-start',
+    paddingBottom: 8,
+  },
+  hotCardItem: {
+    marginRight: 12,
   },
   fullList: {
     flex: 1,
@@ -548,5 +715,81 @@ const styles = StyleSheet.create({
   listContent: {
     padding: 16,
     paddingTop: 4,
+  },
+  floatingCard: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    zIndex: 20,
+  },
+  floatingCardInner: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  floatingCardAccent: {
+    width: 5,
+  },
+  floatingCardBody: {
+    flex: 1,
+    padding: 12,
+    gap: 6,
+  },
+  floatingCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  floatingCatIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  floatingCatLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    flex: 1,
+  },
+  floatingUrgency: {
+    fontSize: 10,
+    color: '#EF4444',
+    fontWeight: '700',
+  },
+  floatingClose: {
+    padding: 2,
+  },
+  floatingTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    lineHeight: 20,
+  },
+  floatingFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  floatingFooterLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    flex: 1,
+  },
+  floatingPlace: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    flex: 1,
+  },
+  floatingDist: {
+    fontSize: 11,
+    fontWeight: '700',
   },
 });

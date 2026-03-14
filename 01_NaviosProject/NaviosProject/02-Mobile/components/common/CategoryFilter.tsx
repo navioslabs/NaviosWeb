@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { ScrollView, TouchableOpacity, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { CATEGORIES, CategoryId, getCategoryIconName } from '../../constants/categories';
@@ -16,40 +16,27 @@ export default function CategoryFilter({ active, onSelect, counts }: Props) {
   const items = [ALL_ITEM, ...CATEGORIES];
 
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.container}
-    >
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.container}>
       {items.map((cat) => {
         const isActive = active === cat.id;
         const count = cat.id !== 'all' ? counts?.[cat.id as CategoryId] : undefined;
         const iconName = getCategoryIconName(cat.id) as keyof typeof Ionicons.glyphMap;
+
         return (
           <TouchableOpacity
             key={cat.id}
             onPress={() => onSelect(cat.id as CategoryId | 'all')}
             style={[
               styles.chip,
-              isActive
-                ? { backgroundColor: cat.color }
-                : { backgroundColor: 'rgba(255,255,255,0.95)' },
+              isActive ? { backgroundColor: cat.color } : { backgroundColor: 'rgba(255,255,255,0.95)' },
             ]}
             activeOpacity={0.7}
           >
-            <Ionicons
-              name={iconName}
-              size={13}
-              color={isActive ? '#fff' : Colors.textSecondary}
-            />
-            <Text style={[styles.label, isActive ? styles.labelActive : styles.labelInactive]}>
-              {cat.label}
-            </Text>
-            {count !== undefined && (
-              <Text style={[styles.count, isActive ? styles.countActive : styles.countInactive]}>
-                {count}
-              </Text>
-            )}
+            <Ionicons name={iconName} size={13} color={isActive ? '#fff' : Colors.textSecondary} />
+            <Text style={[styles.label, isActive ? styles.labelActive : styles.labelInactive]}>{cat.label}</Text>
+            {count !== undefined ? (
+              <Text style={[styles.count, isActive ? styles.countActive : styles.countInactive]}>{count}</Text>
+            ) : null}
           </TouchableOpacity>
         );
       })}
