@@ -11,11 +11,13 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { Colors } from '../../constants/colors';
 import UserAvatar from '../../components/common/UserAvatar';
 import CategoryBadge from '../../components/common/CategoryBadge';
 import { ProfileSkeleton } from '../../components/common/SkeletonLoader';
+import { getCategoryInfo, getCategoryIconName } from '../../constants/categories';
 import { useAuth } from '../../hooks/useAuth';
 import { signOut } from '../../lib/auth';
 import { supabase } from '../../lib/supabase';
@@ -63,6 +65,7 @@ function getFileExtension(uri: string) {
 }
 
 export default function ProfileScreen() {
+  const router = useRouter();
   const { user } = useAuth();
 
   const [profile, setProfile] = useState<ProfileData | null>(null);
@@ -71,11 +74,7 @@ export default function ProfileScreen() {
   const [error, setError] = useState<string | null>(null);
   const [postTab, setPostTab] = useState<PostTab>('active');
   const [submittingLogout, setSubmittingLogout] = useState(false);
-
-  // Avatar upload state
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
-
-  // Display name editing state
   const [editingName, setEditingName] = useState(false);
   const [editedName, setEditedName] = useState('');
   const [savingName, setSavingName] = useState(false);
@@ -84,13 +83,11 @@ export default function ProfileScreen() {
     const load = async () => {
       if (!user) {
         setLoading(false);
-        setError('User is not logged in.');
+        setError('ログインしていません。');
         return;
       }
-
       setLoading(true);
       setError(null);
-
       try {
         const [profileResult, postsResult] = await Promise.all([
           supabase
@@ -105,7 +102,6 @@ export default function ProfileScreen() {
             .order('created_at', { ascending: false })
             .limit(50),
         ]);
-
         if (profileResult.error) throw profileResult.error;
         if (postsResult.error) throw postsResult.error;
 
@@ -123,24 +119,22 @@ export default function ProfileScreen() {
           phone: profileRow?.phone ?? null,
         });
 
-        const mappedPosts = (postsResult.data ?? []).map((row: any) => ({
-          id: row.id,
-          title: row.title ?? '',
-          category: row.category as CategoryId,
-          status: row.is_ended ? 'ended' : 'active',
-          createdAt: formatPostTime(row.created_at),
-          comments: Array.isArray(row.comments) ? row.comments.length : 0,
-        }));
-
-        setPosts(mappedPosts);
+        setPosts(
+          (postsResult.data ?? []).map((row: any) => ({
+            id: row.id,
+            title: row.title ?? '',
+            category: row.category as CategoryId,
+            status: row.is_ended ? 'ended' : 'active',
+            createdAt: formatPostTime(row.created_at),
+            comments: Array.isArray(row.comments) ? row.comments.length : 0,
+          })),
+        );
       } catch (loadError) {
-        const message = loadError instanceof Error ? loadError.message : 'Failed to load profile.';
-        setError(message);
+        setError(loadError instanceof Error ? loadError.message : 'プロフィール取得に失敗しました。');
       } finally {
         setLoading(false);
       }
     };
-
     load();
   }, [user]);
 
@@ -151,100 +145,58 @@ export default function ProfileScreen() {
 
   const handlePickAvatar = async () => {
     if (!user || uploadingAvatar) return;
-
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permissionResult.granted) {
       Alert.alert('権限エラー', '画像ライブラリへのアクセスを許可してください。');
       return;
     }
-
     const pickerResult = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [1, 1],
       quality: 1,
     });
-
     if (pickerResult.canceled || !pickerResult.assets?.[0]?.uri) return;
 
     setUploadingAvatar(true);
     try {
-      const originalUri = pickerResult.assets[0].uri;
-      const optimizedUri = await optimizeImage(originalUri, 400, 0.7);
-
+      const optimizedUri = await optimizeImage(pickerResult.assets[0].uri, 400, 0.7);
       const ext = getFileExtension(optimizedUri);
       const filePath = `${user.id}/${Date.now()}.${ext}`;
-
       const response = await fetch(optimizedUri);
       if (!response.ok) throw new Error('画像の読み込みに失敗しました。');
       const fileData = await response.arrayBuffer();
 
       const { error: uploadError } = await supabase.storage
         .from('avatars')
-        .upload(filePath, fileData, {
-          contentType: `image/${ext}`,
-          upsert: true,
-        });
-
+        .upload(filePath, fileData, { contentType: `image/${ext}`, upsert: true });
       if (uploadError) throw uploadError;
 
       const { data: publicData } = supabase.storage.from('avatars').getPublicUrl(filePath);
-      const publicUrl = publicData.publicUrl;
-      if (!publicUrl) throw new Error('公開URLの取得に失敗しました。');
+      if (!publicData.publicUrl) throw new Error('公開URLの取得に失敗しました。');
 
-      const { error: updateError } = await supabase
-        .from('users')
-        .update({ avatar: publicUrl })
-        .eq('id', user.id);
-
-      if (updateError) throw updateError;
-
-      setProfile((prev) => (prev ? { ...prev, avatar: publicUrl } : prev));
+      await supabase.from('users').update({ avatar: publicData.publicUrl }).eq('id', user.id);
+      setProfile((prev) => (prev ? { ...prev, avatar: publicData.publicUrl } : prev));
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'アバターの更新に失敗しました。';
-      Alert.alert('エラー', message);
+      Alert.alert('エラー', err instanceof Error ? err.message : 'アバターの更新に失敗しました。');
     } finally {
       setUploadingAvatar(false);
     }
   };
 
-  const handleStartEditName = () => {
-    if (!profile) return;
-    setEditedName(profile.displayName);
-    setEditingName(true);
-  };
-
-  const handleCancelEditName = () => {
-    setEditingName(false);
-    setEditedName('');
-  };
-
   const handleSaveName = async () => {
     if (!user || !profile) return;
     const trimmed = editedName.trim();
-    if (!trimmed) {
-      Alert.alert('エラー', '表示名を入力してください。');
-      return;
-    }
-    if (trimmed === profile.displayName) {
-      setEditingName(false);
-      return;
-    }
-
+    if (!trimmed) return;
+    if (trimmed === profile.displayName) { setEditingName(false); return; }
     setSavingName(true);
     try {
-      const { error: updateError } = await supabase
-        .from('users')
-        .update({ display_name: trimmed })
-        .eq('id', user.id);
-
+      const { error: updateError } = await supabase.from('users').update({ display_name: trimmed }).eq('id', user.id);
       if (updateError) throw updateError;
-
       setProfile((prev) => (prev ? { ...prev, displayName: trimmed } : prev));
       setEditingName(false);
     } catch (err) {
-      const message = err instanceof Error ? err.message : '表示名の更新に失敗しました。';
-      Alert.alert('エラー', message);
+      Alert.alert('エラー', err instanceof Error ? err.message : '表示名の更新に失敗しました。');
     } finally {
       setSavingName(false);
     }
@@ -256,8 +208,7 @@ export default function ProfileScreen() {
     try {
       await signOut();
     } catch (logoutError) {
-      const message = logoutError instanceof Error ? logoutError.message : 'Failed to sign out.';
-      Alert.alert('ログアウトに失敗しました', message);
+      Alert.alert('ログアウトに失敗しました', logoutError instanceof Error ? logoutError.message : '');
     } finally {
       setSubmittingLogout(false);
     }
@@ -265,7 +216,7 @@ export default function ProfileScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.center}>
+      <SafeAreaView style={styles.skeletonContainer}>
         <ProfileSkeleton />
       </SafeAreaView>
     );
@@ -273,150 +224,199 @@ export default function ProfileScreen() {
 
   if (error || !profile) {
     return (
-      <SafeAreaView style={styles.center}>
+      <SafeAreaView style={styles.errorContainer}>
         <Ionicons name="alert-circle-outline" size={40} color={Colors.danger} />
-        <Text style={styles.centerText}>{error ?? 'プロフィール取得に失敗しました'}</Text>
+        <Text style={styles.errorText}>{error ?? 'プロフィール取得に失敗しました'}</Text>
       </SafeAreaView>
     );
   }
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>マイページ</Text>
-      </View>
-
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.card}>
-          <View style={styles.profileRow}>
-            <TouchableOpacity onPress={handlePickAvatar} disabled={uploadingAvatar} style={styles.avatarWrapper}>
-              <UserAvatar avatar={profile.avatar} size={64} backgroundColor="#A7F3D0" />
+      <ScrollView showsVerticalScrollIndicator={false}>
+        {/* Hero header */}
+        <View style={styles.heroSection}>
+          <View style={styles.heroBg} />
+          <View style={styles.heroContent}>
+            <TouchableOpacity onPress={handlePickAvatar} disabled={uploadingAvatar} style={styles.avatarWrapper} activeOpacity={0.8}>
+              <UserAvatar avatar={profile.avatar} size={80} backgroundColor="#A7F3D0" />
               <View style={styles.cameraOverlay}>
                 {uploadingAvatar ? (
-                  <ActivityIndicator size={12} color="#fff" />
+                  <ActivityIndicator size={14} color="#fff" />
                 ) : (
-                  <Ionicons name="camera" size={12} color="#fff" />
+                  <Ionicons name="camera" size={14} color="#fff" />
                 )}
               </View>
             </TouchableOpacity>
-            <View style={styles.profileInfo}>
-              {editingName ? (
-                <View style={styles.editNameRow}>
-                  <TextInput
-                    style={styles.editNameInput}
-                    value={editedName}
-                    onChangeText={setEditedName}
-                    autoFocus
-                    maxLength={50}
-                    returnKeyType="done"
-                    onSubmitEditing={handleSaveName}
-                  />
-                  <TouchableOpacity onPress={handleSaveName} disabled={savingName} style={styles.saveNameButton}>
-                    {savingName ? (
-                      <ActivityIndicator size={14} color="#fff" />
-                    ) : (
-                      <Ionicons name="checkmark" size={14} color="#fff" />
-                    )}
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={handleCancelEditName} style={styles.cancelNameButton}>
-                    <Ionicons name="close" size={14} color={Colors.textSecondary} />
-                  </TouchableOpacity>
+
+            {editingName ? (
+              <View style={styles.editNameRow}>
+                <TextInput
+                  style={styles.editNameInput}
+                  value={editedName}
+                  onChangeText={setEditedName}
+                  autoFocus
+                  maxLength={50}
+                  returnKeyType="done"
+                  onSubmitEditing={handleSaveName}
+                  placeholder="表示名を入力"
+                  placeholderTextColor={Colors.textMuted}
+                />
+                <TouchableOpacity onPress={handleSaveName} disabled={savingName} style={styles.saveBtn}>
+                  {savingName ? <ActivityIndicator size={14} color="#fff" /> : <Ionicons name="checkmark" size={16} color="#fff" />}
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setEditingName(false)} style={styles.cancelBtn}>
+                  <Ionicons name="close" size={16} color={Colors.textSecondary} />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity
+                onPress={() => { setEditedName(profile.displayName); setEditingName(true); }}
+                style={styles.nameRow}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.heroName}>{profile.displayName}</Text>
+                <Ionicons name="pencil-outline" size={14} color="rgba(255,255,255,0.7)" />
+              </TouchableOpacity>
+            )}
+
+            <View style={styles.heroBadges}>
+              {profile.verified ? (
+                <View style={styles.verifiedChip}>
+                  <Ionicons name="checkmark-circle" size={12} color="#fff" />
+                  <Text style={styles.verifiedChipText}>認証済み</Text>
                 </View>
-              ) : (
-                <View style={styles.nameRow}>
-                  <TouchableOpacity onPress={handleStartEditName} style={styles.nameTouchable}>
-                    <Text style={styles.displayName}>{profile.displayName}</Text>
-                    <Ionicons name="pencil" size={13} color={Colors.textMuted} style={styles.pencilIcon} />
-                  </TouchableOpacity>
-                  {profile.verified ? (
-                    <View style={styles.verifiedBadge}>
-                      <Ionicons name="checkmark-circle" size={12} color="#059669" />
-                      <Text style={styles.verifiedText}>認証済み</Text>
-                    </View>
-                  ) : null}
-                </View>
-              )}
-              <Text style={styles.metaText}>{profile.email}</Text>
-              <Text style={styles.metaText}>{profile.phone || '電話番号未設定'}</Text>
+              ) : null}
+              <Text style={styles.heroEmail}>{profile.email}</Text>
             </View>
           </View>
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>あなたの活動</Text>
-          <View style={styles.statsRow}>
-            <StatBox label="投稿" value={posts.length} color="#059669" bg="#ECFDF5" />
-            <StatBox label="公開中" value={activePosts.length} color="#BE123C" bg="#FFF1F2" />
-            <StatBox label="コメント" value={totalComments} color="#1D4ED8" bg="#EFF6FF" />
-          </View>
+        {/* Stats row */}
+        <View style={styles.statsBar}>
+          <StatItem icon="document-text-outline" value={posts.length} label="投稿" color="#10B981" />
+          <View style={styles.statDivider} />
+          <StatItem icon="radio-outline" value={activePosts.length} label="公開中" color="#F59E0B" />
+          <View style={styles.statDivider} />
+          <StatItem icon="chatbubble-outline" value={totalComments} label="コメント" color="#3B82F6" />
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>自分の投稿</Text>
-
-          <View style={styles.tabRow}>
-            <TouchableOpacity
-              style={[styles.tab, postTab === 'active' && styles.tabActive]}
-              onPress={() => setPostTab('active')}
-            >
-              <Text style={[styles.tabText, postTab === 'active' && styles.tabTextActive]}>
-                公開中 ({activePosts.length})
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.tab, postTab === 'ended' && styles.tabEnded]}
-              onPress={() => setPostTab('ended')}
-            >
-              <Text style={[styles.tabText, postTab === 'ended' && styles.tabTextEnded]}>
-                終了済み ({endedPosts.length})
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.postList}>
-            {displayPosts.map((post) => (
-              <View
-                key={post.id}
-                style={[styles.postItem, post.status === 'ended' && styles.postItemEnded]}
-              >
-                <CategoryBadge categoryId={post.category} size="sm" />
-                <View style={styles.postBody}>
-                  <Text style={styles.postTitle} numberOfLines={1}>
-                    {post.title}
-                  </Text>
-                  <View style={styles.postMetaRow}>
-                    <Text style={styles.postMeta}>{post.createdAt}</Text>
-                    <View style={styles.metaStat}>
-                      <Ionicons name="chatbubble-outline" size={11} color={Colors.textMuted} />
-                      <Text style={styles.postMeta}>{post.comments}</Text>
-                    </View>
-                  </View>
-                </View>
+        <View style={styles.body}>
+          {/* My posts section */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionIconBox}>
+                <Ionicons name="list-outline" size={16} color="#fff" />
               </View>
-            ))}
-            {displayPosts.length === 0 ? (
-              <Text style={styles.emptyText}>表示する投稿がありません</Text>
-            ) : null}
-          </View>
-        </View>
+              <Text style={styles.sectionTitle}>自分の投稿</Text>
+            </View>
 
-        <View style={styles.card}>
-          <TouchableOpacity
-            style={[styles.logoutButton, submittingLogout && styles.logoutButtonDisabled]}
-            onPress={handleLogout}
-            disabled={submittingLogout}
-          >
-            <Text style={styles.logoutText}>{submittingLogout ? 'ログアウト中...' : 'ログアウト'}</Text>
-          </TouchableOpacity>
+            <View style={styles.tabBar}>
+              <TouchableOpacity
+                style={[styles.tabItem, postTab === 'active' && styles.tabItemActive]}
+                onPress={() => setPostTab('active')}
+              >
+                <Ionicons name="radio-outline" size={14} color={postTab === 'active' ? '#10B981' : Colors.textMuted} />
+                <Text style={[styles.tabLabel, postTab === 'active' && styles.tabLabelActive]}>
+                  公開中 ({activePosts.length})
+                </Text>
+                {postTab === 'active' ? <View style={styles.tabIndicator} /> : null}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.tabItem, postTab === 'ended' && styles.tabItemActive]}
+                onPress={() => setPostTab('ended')}
+              >
+                <Ionicons name="archive-outline" size={14} color={postTab === 'ended' ? '#64748B' : Colors.textMuted} />
+                <Text style={[styles.tabLabel, postTab === 'ended' && styles.tabLabelEnded]}>
+                  終了済み ({endedPosts.length})
+                </Text>
+                {postTab === 'ended' ? <View style={[styles.tabIndicator, { backgroundColor: '#64748B' }]} /> : null}
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.postList}>
+              {displayPosts.map((post) => {
+                const cat = getCategoryInfo(post.category);
+                const iconName = getCategoryIconName(post.category) as keyof typeof Ionicons.glyphMap;
+                return (
+                  <TouchableOpacity
+                    key={post.id}
+                    style={[styles.postCard, post.status === 'ended' && styles.postCardEnded]}
+                    onPress={() => router.push(`/post/${post.id}`)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.postIconBox, { backgroundColor: cat.color }]}>
+                      <Ionicons name={iconName} size={16} color="#fff" />
+                    </View>
+                    <View style={styles.postBody}>
+                      <Text style={styles.postTitle} numberOfLines={1}>{post.title}</Text>
+                      <View style={styles.postMetaRow}>
+                        <Text style={styles.postMeta}>{post.createdAt}</Text>
+                        <View style={styles.postMetaDot} />
+                        <Ionicons name="chatbubble-outline" size={10} color={Colors.textMuted} />
+                        <Text style={styles.postMeta}>{post.comments}</Text>
+                      </View>
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+                  </TouchableOpacity>
+                );
+              })}
+              {displayPosts.length === 0 ? (
+                <View style={styles.emptyBox}>
+                  <Ionicons name={postTab === 'ended' ? 'archive-outline' : 'document-text-outline'} size={32} color={Colors.textMuted} />
+                  <Text style={styles.emptyText}>
+                    {postTab === 'ended' ? '終了した投稿はまだありません' : '公開中の投稿はありません'}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          </View>
+
+          {/* Account section */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <View style={[styles.sectionIconBox, { backgroundColor: '#64748B' }]}>
+                <Ionicons name="settings-outline" size={16} color="#fff" />
+              </View>
+              <Text style={styles.sectionTitle}>アカウント</Text>
+            </View>
+
+            <View style={styles.menuList}>
+              <View style={styles.menuItem}>
+                <Ionicons name="mail-outline" size={18} color={Colors.textSecondary} />
+                <Text style={styles.menuLabel}>メールアドレス</Text>
+                <Text style={styles.menuValue} numberOfLines={1}>{profile.email}</Text>
+              </View>
+              <View style={styles.menuDivider} />
+              <View style={styles.menuItem}>
+                <Ionicons name="call-outline" size={18} color={Colors.textSecondary} />
+                <Text style={styles.menuLabel}>電話番号</Text>
+                <Text style={[styles.menuValue, !profile.phone && styles.menuValueMuted]}>
+                  {profile.phone || '未設定'}
+                </Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.logoutButton, submittingLogout && { opacity: 0.6 }]}
+              onPress={handleLogout}
+              disabled={submittingLogout}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="log-out-outline" size={18} color="#DC2626" />
+              <Text style={styles.logoutText}>{submittingLogout ? 'ログアウト中...' : 'ログアウト'}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function StatBox({ label, value, color, bg }: { label: string; value: number; color: string; bg: string }) {
+function StatItem({ icon, value, label, color }: { icon: keyof typeof Ionicons.glyphMap; value: number; label: string; color: string }) {
   return (
-    <View style={[styles.statBox, { backgroundColor: bg }]}>
+    <View style={styles.statItem}>
+      <Ionicons name={icon} size={16} color={color} />
       <Text style={[styles.statValue, { color }]}>{value}</Text>
       <Text style={styles.statLabel}>{label}</Text>
     </View>
@@ -424,138 +424,285 @@ function StatBox({ label, value, color, bg }: { label: string; value: number; co
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  center: {
-    flex: 1,
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  skeletonContainer: { flex: 1, backgroundColor: '#fff', padding: 24 },
+  errorContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: '#fff', padding: 24 },
+  errorText: { fontSize: 13, color: Colors.textSecondary, textAlign: 'center' },
+
+  // Hero
+  heroSection: {
+    position: 'relative',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    backgroundColor: '#fff',
-    padding: 24,
+    paddingBottom: 20,
   },
-  centerText: { fontSize: 13, color: Colors.textSecondary, textAlign: 'center' },
-  header: {
-    padding: 16,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+  heroBg: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 120,
+    backgroundColor: '#10B981',
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
   },
-  title: { fontSize: 22, fontWeight: '700', color: Colors.textPrimary },
-  content: { padding: 16, gap: 12, paddingBottom: 32 },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 16,
-    gap: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
+  heroContent: {
+    alignItems: 'center',
+    paddingTop: 40,
+    gap: 8,
   },
-  profileRow: { flexDirection: 'row', gap: 12 },
   avatarWrapper: {
     position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 6,
   },
   cameraOverlay: {
     position: 'absolute',
     bottom: 0,
-    right: 0,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: Colors.primary,
+    right: -2,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#059669',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
+    borderWidth: 3,
     borderColor: '#fff',
   },
-  profileInfo: { flex: 1, gap: 4 },
-  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
-  nameTouchable: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  pencilIcon: { marginTop: 1 },
-  editNameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  heroName: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+  },
+  editNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 24,
+  },
   editNameInput: {
     flex: 1,
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 18,
+    fontWeight: '700',
     color: Colors.textPrimary,
-    borderBottomWidth: 1.5,
-    borderBottomColor: Colors.primary,
-    paddingVertical: 2,
-    paddingHorizontal: 0,
+    borderBottomWidth: 2,
+    borderBottomColor: '#10B981',
+    paddingVertical: 4,
+    textAlign: 'center',
   },
-  saveNameButton: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: Colors.primary,
+  saveBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#10B981',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cancelNameButton: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: Colors.surfaceSecondary,
+  cancelBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  displayName: { fontSize: 18, fontWeight: '700', color: Colors.textPrimary },
-  verifiedBadge: {
+  heroBadges: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  verifiedChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    backgroundColor: '#D1FAE5',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 10,
+    backgroundColor: '#10B981',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
   },
-  verifiedText: { fontSize: 10, fontWeight: '700', color: '#059669' },
-  metaText: { fontSize: 13, color: Colors.textSecondary },
-  sectionTitle: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary },
-  statsRow: { flexDirection: 'row', gap: 10 },
-  statBox: { flex: 1, borderRadius: 12, padding: 12, alignItems: 'center', gap: 2 },
-  statValue: { fontSize: 24, fontWeight: '700' },
-  statLabel: { fontSize: 11, color: Colors.textSecondary },
-  tabRow: { flexDirection: 'row', gap: 8 },
-  tab: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
+  verifiedChipText: { fontSize: 10, fontWeight: '700', color: '#fff' },
+  heroEmail: { fontSize: 12, color: Colors.textSecondary },
+
+  // Stats bar
+  statsBar: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginTop: -8,
+    borderRadius: 16,
+    paddingVertical: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  statItem: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 2,
+  },
+  statValue: { fontSize: 20, fontWeight: '800' },
+  statLabel: { fontSize: 10, color: Colors.textSecondary, fontWeight: '500' },
+  statDivider: {
+    width: 1,
+    backgroundColor: '#E2E8F0',
+    marginVertical: 4,
+  },
+
+  // Body
+  body: {
+    padding: 16,
+    gap: 16,
+    paddingBottom: 32,
+  },
+
+  // Section
+  section: {
+    gap: 12,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  sectionIconBox: {
+    width: 28,
+    height: 28,
     borderRadius: 8,
-    backgroundColor: Colors.surfaceSecondary,
+    backgroundColor: '#10B981',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  tabActive: { backgroundColor: Colors.primary },
-  tabEnded: { backgroundColor: '#475569' },
-  tabText: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary },
-  tabTextActive: { color: '#fff' },
-  tabTextEnded: { color: '#fff' },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+
+  // Tab bar
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  tabItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    gap: 4,
+    position: 'relative',
+  },
+  tabItemActive: {},
+  tabLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.textMuted,
+  },
+  tabLabelActive: { color: '#10B981', fontWeight: '700' },
+  tabLabelEnded: { color: '#64748B', fontWeight: '700' },
+  tabIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    left: '15%',
+    right: '15%',
+    height: 2.5,
+    borderRadius: 2,
+    backgroundColor: '#10B981',
+  },
+
+  // Post list
   postList: { gap: 8 },
-  postItem: {
+  postCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
     padding: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: Colors.border,
     backgroundColor: '#fff',
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
   },
-  postItemEnded: { backgroundColor: Colors.surfaceSecondary },
-  postBody: { flex: 1, gap: 4 },
-  postTitle: { fontSize: 13, fontWeight: '700', color: Colors.textPrimary },
-  postMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  postMeta: { fontSize: 11, color: Colors.textMuted },
-  metaStat: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  emptyText: { fontSize: 13, color: Colors.textMuted, textAlign: 'center', padding: 16 },
-  logoutButton: {
-    marginTop: 4,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#FCA5A5',
+  postCardEnded: {
+    opacity: 0.65,
+  },
+  postIconBox: {
+    width: 36,
+    height: 36,
     borderRadius: 10,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  logoutButtonDisabled: { opacity: 0.6 },
-  logoutText: { fontSize: 13, fontWeight: '600', color: Colors.danger },
+  postBody: { flex: 1, gap: 3 },
+  postTitle: { fontSize: 13, fontWeight: '700', color: Colors.textPrimary },
+  postMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  postMeta: { fontSize: 11, color: Colors.textMuted },
+  postMetaDot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: Colors.textMuted },
+  emptyBox: {
+    alignItems: 'center',
+    paddingVertical: 32,
+    gap: 8,
+  },
+  emptyText: { fontSize: 13, color: Colors.textMuted },
+
+  // Menu list
+  menuList: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+  },
+  menuLabel: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    fontWeight: '500',
+  },
+  menuValue: {
+    flex: 1,
+    fontSize: 13,
+    color: Colors.textPrimary,
+    textAlign: 'right',
+    fontWeight: '600',
+  },
+  menuValueMuted: { color: Colors.textMuted, fontWeight: '400' },
+  menuDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: '#E2E8F0',
+    marginLeft: 42,
+  },
+
+  // Logout
+  logoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    padding: 14,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  logoutText: { fontSize: 14, fontWeight: '600', color: '#DC2626' },
 });

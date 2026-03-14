@@ -1,70 +1,117 @@
-# Session Handoff (2026-03-15, latest)
+# Session Handoff (2026-03-15, final)
 
 ## Goal
 次担当者が、追加調査なしで実装を継続できる状態にする。
 
-## What Was Implemented
+---
 
-### Phase 1: カテゴリ名 + Nearbyフローティングカード
-1. カテゴリ名を正式名称に変更（`constants/categories.ts`）
-   - `特売`→`物資`、`助け合い`→`近助`、`自治会`→`行政`
-   - IDは変更なし（`stock`, `event`, `help`, `admin`）
-2. Nearby画面にフローティングプレビューカード追加
-   - ピンタップ → spring スライドイン / 別ピン → スライドアウト→イン / 空白タップ → 消去
+## What Was Implemented（全21項目）
+
+### Phase 1: 基盤修正
+1. カテゴリ名正式化（`constants/categories.ts`）— 物資/イベント/近助/行政
+2. Nearby画面フローティングプレビューカード（ピンタップ→スライドイン）
 
 ### Phase 2: 4画面同時改修
-3. **マイページ** (`app/(tabs)/profile.tsx`, `components/common/UserAvatar.tsx`)
-   - `UserAvatar` がURL画像に対応（`http`で始まる場合Image、それ以外はテキスト）
-   - アバタータップ → ImagePicker → Supabase Storage `avatars` アップロード → `users.avatar` 更新
-   - カメラアイコンオーバーレイ
-   - ユーザー名: 鉛筆アイコンタップ → インラインTextInput → 保存（✓）/キャンセル（✕）
-4. **投稿画面** (`app/post/create.tsx`)
-   - カテゴリ選択を2x2グリッド化（大きいタッチターゲット）
-   - セクション間をディバイダーで整理（カード入れ子→フラット構造）
-   - ヘッダー: 円形閉じるボタン / 中央「新規投稿」/ 送信ボタンにアイコン
-   - 画像プレビュー100x100
-   - 時刻入力: テキスト入力 → スクロール式時刻ピッカーモーダル（時0-23 / 分00-55）
-5. **Pulse画面** (`app/(tabs)/index.tsx`)
-   - ヘッダー完全削除
-   - 検索ボックスを画面最下部にフローティング配置（チャット入力風）
-   - クイックタグを検索ボックスの直上に移動
-   - 候補表示: 全幅リスト → 横スクロールのコンパクトチップ
-   - カラーテーマ: 紫(#7C3AED) → ティール(#0D9488)
-6. **検索→タイムライン** (`app/(tabs)/search.tsx`, `app/(tabs)/_layout.tsx`)
-   - 検索機能を完全削除（検索ボックス、トレンド、過去人気、カテゴリグリッド）
-   - 全投稿を新着順に時系列表示（FlatList + pull-to-refresh）
-   - カテゴリフィルターチップ（横スクロール、件数付き）
-   - タブ: icon `search` → `time-outline` / label `検索` → `タイムライン`
-7. **画像最適化** (`lib/postService.ts`)
-   - `optimizeImage(uri, maxSize, quality)` 関数追加
-   - 投稿画像アップロード時に自動リサイズ（max 800px, quality 0.7）
-   - アバターアップロード時に自動リサイズ（max 400px, quality 0.7）
+3. マイページ — アバター画像アップロード + ユーザー名インライン編集
+4. 投稿画面 — モダンUI（2x2カテゴリ、セクションディバイダー）+ 時刻ピッカーモーダル
+5. Pulse — ヘッダー削除、検索ボックス下部フローティング、ティール系カラー
+6. 検索→タイムライン — SectionList（最新/盛り上がり/過去の人気）、オレンジテーマ
 
-## Files Changed
-- `constants/categories.ts` — カテゴリラベル修正
-- `app/(tabs)/nearby.tsx` — フローティングカード追加
-- `app/(tabs)/profile.tsx` — アバター画像化、ユーザー名編集
-- `components/common/UserAvatar.tsx` — URL画像対応
-- `app/post/create.tsx` — モダンUI、時刻ピッカー
-- `app/(tabs)/index.tsx` — Pulse改修（カラー、レイアウト）
-- `app/(tabs)/search.tsx` — タイムライン画面に変換
+### Phase 3: 品質向上（15項目一括）
+7. `constants/design.ts` 作成（FontSize/Spacing/Radius/Duration/Shadow）
+8. `constants/colors.ts` 拡張（teal/orange/purple追加）
+9. `CategoryDetailCard.tsx` ハードコード色 → getCategoryInfo()
+10. `index.tsx`（Pulse）のカラー定数化
+11. 認証画面（login/register）全テキスト日本語化
+12. 認証画面 Alert → インラインエラー表示
+13. `SkeletonLoader.tsx` 新規作成 + タイムライン/プロフィールに適用
+14. `PostCard.tsx` 固定幅176px → レスポンシブ（画面幅42%）
+15. いいね永続化（`toggleLike` / `checkUserLiked` in postService）
+16. コメント自動ページネーション（スクロール末尾で自動読み込み）
+17. ハプティック（いいね/コメント送信/シェア）
+18. 投稿の終了/削除（著者に「...」メニュー表示）
+19. 投稿作成3ステップ化（基本→詳細→確認）+ ステップインジケーター
+20. 位置情報手動入力フォールバック
+
+### Phase 4: UI仕上げ
+21. マイページ全面リニューアル（ヒーローヘッダー、統計バー、投稿リストにナビ、メニュー形式アカウント欄）
+
+---
+
+## Files Changed（全ファイル一覧）
+
+### 新規作成
+- `constants/design.ts` — デザイントークン
+- `components/common/SkeletonLoader.tsx` — スケルトンローダー
+
+### 大幅変更
+- `app/(tabs)/profile.tsx` — ヒーロー型UI全面リニューアル
+- `app/(tabs)/search.tsx` — タイムライン画面に変換（SectionList）
+- `app/(tabs)/index.tsx` — Pulse改修（レイアウト、カラー）
+- `app/post/create.tsx` — 3ステップ化 + 位置情報フォールバック
+- `app/post/[id].tsx` — いいね永続化、コメント自動読み込み、投稿管理、ハプティック
+- `lib/postService.ts` — toggleLike/checkUserLiked/endPost/deletePost/optimizeImage追加
+
+### 修正
 - `app/(tabs)/_layout.tsx` — タブラベル/アイコン変更
-- `lib/postService.ts` — `optimizeImage` 追加、投稿画像に適用
+- `app/(tabs)/nearby.tsx` — フローティングカード追加
+- `app/auth/login.tsx` — 日本語化 + インラインエラー
+- `app/auth/register.tsx` — 日本語化 + インラインエラー
+- `constants/categories.ts` — ラベル修正
+- `constants/colors.ts` — 色追加
+- `components/common/UserAvatar.tsx` — URL画像対応
+- `components/post/PostCard.tsx` — レスポンシブ幅
+- `components/post/CategoryDetailCard.tsx` — ハードコード色排除
+- `CLAUDE.md` — コード規約追加、アーキテクチャ更新
 
-## Before Running
+---
+
+## Before Running（セットアップ手順）
+
+### 1. パッケージインストール
 ```bash
-npx expo install expo-image-manipulator
+npx expo install expo-haptics expo-image-manipulator
 ```
 
+### 2. Supabase DB
+```sql
+CREATE TABLE post_likes (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  post_id uuid REFERENCES posts(id) ON DELETE CASCADE,
+  user_id uuid REFERENCES users(id) ON DELETE CASCADE,
+  created_at timestamptz DEFAULT now(),
+  UNIQUE(post_id, user_id)
+);
+ALTER TABLE post_likes ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "いいねは誰でも読める" ON post_likes FOR SELECT USING (true);
+CREATE POLICY "自分のいいねを追加できる" ON post_likes FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "自分のいいねを削除できる" ON post_likes FOR DELETE USING (auth.uid() = user_id);
+```
+
+### 3. Supabase Storage
+- `avatars` バケットを Public で作成
+
+---
+
 ## What's NOT Done Yet
-- MapLibre未統合（地図はプレースホルダー）
+
+- MapLibre 未統合（地図はプレースホルダー）
 - 全画面の実機テスト未実施
-- コメントページネーション未実装
+- コメント楽観更新未完
+- `lib/mockData.ts` 残存（削除可）
+- `components/common/BottomTabBar.tsx` 残存（削除可）
+
+---
 
 ## Next Steps（推奨順）
-1. **MapLibre統合**（`app/(tabs)/nearby.tsx` の `mapPlaceholder` → 実地図）
-2. **実機回帰テスト**（認証・投稿作成・画像アップロード・アバター編集・タイムライン）
-3. コメントページネーション + 楽観更新
+
+1. **MapLibre統合** — `app/(tabs)/nearby.tsx` の `mapPlaceholder` を実地図に置き換え
+2. **実機回帰テスト** — 全画面（認証/投稿/画像/アバター/いいね/タイムライン）
+3. **不要ファイル削除** — `lib/mockData.ts`, `components/common/BottomTabBar.tsx`
+4. **コメント楽観更新** — 送信後の即時反映
+5. **`create.tsx` 分割** — 1,406行 → ステップごとのサブコンポーネントに
+
+---
 
 ## Environment Risk
 - この実行環境では `node` / `npm` / `npx` が見つからず、テストコマンドを実行できない。

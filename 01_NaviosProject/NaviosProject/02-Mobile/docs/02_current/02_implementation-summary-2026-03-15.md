@@ -1,60 +1,91 @@
-# 実装サマリー（2026-03-15 更新）
+# 実装サマリー（2026-03-15 最終更新）
 
-## 進捗概要
-- 認証（ログイン/新規登録/ログアウト）: 実装済み
-- ルート認証ガード: 実装済み
-- 投稿データ取得（通常）: Supabase化済み
-- Nearby投稿取得: `get_nearby_posts` RPC 接続済み
-- 投稿詳細: Supabase read 接続済み
-- コメント: read/write 接続済み
-- 投稿作成: `posts` + `post_details` + `post_images` 接続済み
-- マイページ: Supabase化済み + アバター画像/ユーザー名編集対応
-- Pulse: ティール系カラー、検索ボックス下部配置、ヘッダー削除
-- タイムライン: 旧検索画面を全投稿時系列表示に変更
+## 全体進捗
 
-## 今回の更新（2026-03-15）
+| 機能 | 状態 |
+|------|------|
+| 認証（ログイン/登録/ログアウト） | 完了 |
+| 認証ガード | 完了 |
+| 投稿データ取得 | Supabase化済み |
+| Nearby投稿（RPC） | 完了 |
+| 投稿詳細/コメント | read/write完了 |
+| いいね | post_likes永続化完了 |
+| 投稿作成 | 3ステップ式、画像アップ対応 |
+| 投稿管理（終了/削除） | 完了 |
+| マイページ | ヒーロー型UI、アバター編集、ユーザー名編集 |
+| Pulse | AI検索、ティール系テーマ |
+| タイムライン | セクション表示、オレンジ系テーマ |
+| 画像最適化 | optimizeImage（投稿800px/アバター400px） |
+| スケルトンローダー | タイムライン/プロフィールに適用 |
+| ハプティック | いいね/コメント/シェアに適用 |
+| 認証画面日本語化 | 完了 + インラインバリデーション |
+| デザインシステム | constants/design.ts作成、Colors拡張 |
 
-### カテゴリ名正式化
-- `constants/categories.ts`: `特売`→`物資`、`助け合い`→`近助`、`自治会`→`行政`
+## 今セッションの変更一覧
 
-### Nearby画面
-- フローティングプレビューカード追加（ピンタップ→スライドイン）
+### Phase 1: 基盤修正
+1. カテゴリ名正式化（物資/イベント/近助/行政）
+2. Nearbyフローティングプレビューカード
 
-### マイページ (`app/(tabs)/profile.tsx`)
-- アバターを画像URL対応に（`UserAvatar` コンポーネント更新）
-- アバタータップ → ImagePicker → Supabase Storage `avatars` にアップロード
-- カメラアイコンオーバーレイ表示
-- ユーザー名のインライン編集（鉛筆アイコン → TextInput → 保存/キャンセル）
+### Phase 2: 4画面同時改修
+3. マイページ — アバター画像化 + ユーザー名編集
+4. 投稿画面 — モダンUI + 時刻ピッカー
+5. Pulse — ヘッダー削除、検索ボックス下部、ティールカラー
+6. 検索→タイムライン — セクション別表示、オレンジテーマ
 
-### 投稿画面 (`app/post/create.tsx`)
-- UI全面リニューアル: カテゴリ2x2グリッド、セクションディバイダー、入力欄の余白拡大
-- ヘッダー改善: 閉じるボタン円形、「新規投稿」中央、送信ボタンにアイコン追加
-- 画像プレビュー 100x100 に拡大
-- 時刻ピッカーモーダル追加（時:0-23 / 分:00-55 のスクロール式）
+### Phase 3: 品質向上（15項目一括改修）
+7. デザイントークン統一（`constants/design.ts`）
+8. Colors拡張（teal/orange/purple追加）
+9. CategoryDetailCardハードコード排除
+10. Pulseカラー定数化
+11. 認証画面 全テキスト日本語化
+12. 認証画面 インラインバリデーション
+13. スケルトンローダー（コンポーネント作成 + 適用）
+14. PostCardレスポンシブ幅
+15. いいね永続化（`post_likes`テーブル）
+16. コメント自動ページネーション
+17. ハプティックフィードバック
+18. 投稿の終了/削除機能
+19. 投稿作成ステップ化（3ステップ）
+20. 位置情報手動入力フォールバック
 
-### Pulse画面 (`app/(tabs)/index.tsx`)
-- ヘッダー完全削除
-- 検索ボックスを画面下部にフローティング配置（チャット入力風）
-- 候補表示を横スクロールのコンパクトチップに変更
-- カラー: 紫(#7C3AED) → ティール(#0D9488)
+### Phase 4: UI仕上げ
+21. マイページ全面リニューアル（ヒーローヘッダー、統計バー、メニュー形式）
 
-### 検索→タイムライン (`app/(tabs)/search.tsx`)
-- 検索機能を完全削除
-- 全投稿を新着順に時系列表示（FlatList + pull-to-refresh）
-- カテゴリフィルターチップ（横スクロール）
-- タブアイコン/ラベル: `search` → `time-outline` / `タイムライン`
+## ファイル構成（32ファイル）
 
-### 画像最適化 (`lib/postService.ts`)
-- `optimizeImage()` 関数追加（`expo-image-manipulator`）
-- 投稿画像: max 800px, quality 0.7
-- アバター: max 400px, quality 0.7
+```
+app/                    11画面
+components/             9コンポーネント
+hooks/                  4 hooks
+lib/                    5サービス（mockData含む）
+constants/              3定数ファイル
+types/                  1型定義
+```
+
+## 未使用ファイル
+- `lib/mockData.ts` — 全画面からの import なし。参照用として残存
+- `components/common/BottomTabBar.tsx` — Expo Router統合により不要
 
 ## 既知の注意点
 - `node` / `npm` / `npx` が実行環境にないため、型チェック/実機テストは未実行
-- `MapLibre` 本接続は未完（地図はプレースホルダー）
-- `expo-image-manipulator` のインストールが必要: `npx expo install expo-image-manipulator`
+- MapLibre本接続は未完（地図はプレースホルダー）
+- `app/post/create.tsx` が1,406行。将来的にステップごとの分割を検討
 
-## 推奨の次タスク
-1. **MapLibre 本接続**（実座標ピン描画）→ フローティングカードとの連動を検証
-2. 実機で全画面の回帰テスト（認証・投稿作成・画像アップロード・アバター編集）
-3. コメントのページングと楽観更新の改善
+## 追加インストールが必要
+```bash
+npx expo install expo-haptics expo-image-manipulator
+```
+
+## DB追加が必要
+```sql
+CREATE TABLE post_likes (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  post_id uuid REFERENCES posts(id) ON DELETE CASCADE,
+  user_id uuid REFERENCES users(id) ON DELETE CASCADE,
+  created_at timestamptz DEFAULT now(),
+  UNIQUE(post_id, user_id)
+);
+ALTER TABLE post_likes ENABLE ROW LEVEL SECURITY;
+```
+Supabase Storage: `avatars` バケット（Public）の作成も必要。
