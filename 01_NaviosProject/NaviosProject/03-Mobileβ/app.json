@@ -1,0 +1,24 @@
+{
+  "expo": {
+    "name": "NaviOs Beta",
+    "slug": "navios-beta",
+    "scheme": "navios-beta",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.navios.mobilebeta"
+    },
+    "android": {
+      "package": "com.navios.mobilebeta"
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font"
+    ]
+  }
+}
