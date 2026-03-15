@@ -16,6 +16,7 @@ import { CATEGORIES, CategoryId, getCategoryInfo, getCategoryIconName } from '..
 import { Post } from '../../types';
 import PostCard from '../../components/post/PostCard';
 import PostListItem from '../../components/post/PostListItem';
+import MapView from '../../components/map/MapView';
 import { Colors } from '../../constants/colors';
 import { formatDistance } from '../../lib/utils';
 import { useNearbyPosts } from '../../hooks/useNearbyPosts';
@@ -30,17 +31,6 @@ const SHEET_TRANSLATE: Record<SheetState, number> = {
   half: MAX_SHEET_HEIGHT - 260,
   full: 0,
 };
-
-const PIN_POSITIONS = [
-  { top: '22%', left: '25%' },
-  { top: '30%', left: '68%' },
-  { top: '58%', left: '20%' },
-  { top: '65%', left: '72%' },
-  { top: '18%', left: '50%' },
-  { top: '48%', left: '40%' },
-  { top: '75%', left: '45%' },
-  { top: '38%', left: '30%' },
-] as const;
 
 export default function NearbyScreen() {
   const router = useRouter();
@@ -112,24 +102,6 @@ export default function NearbyScreen() {
     return () => blink.stop();
   }, [dotOpacity]);
 
-  const pingScale = useRef(new Animated.Value(1)).current;
-  const pingOpacity = useRef(new Animated.Value(0.7)).current;
-  useEffect(() => {
-    const ping = Animated.loop(
-      Animated.sequence([
-        Animated.parallel([
-          Animated.timing(pingScale, { toValue: 2.4, duration: 1400, useNativeDriver: true }),
-          Animated.timing(pingOpacity, { toValue: 0, duration: 1400, useNativeDriver: true }),
-        ]),
-        Animated.parallel([
-          Animated.timing(pingScale, { toValue: 1, duration: 0, useNativeDriver: true }),
-          Animated.timing(pingOpacity, { toValue: 0.7, duration: 0, useNativeDriver: true }),
-        ]),
-      ]),
-    );
-    ping.start();
-    return () => ping.stop();
-  }, [pingScale, pingOpacity]);
 
   const sheetTranslateY = useRef(new Animated.Value(SHEET_TRANSLATE.half)).current;
 
@@ -167,48 +139,12 @@ export default function NearbyScreen() {
 
   return (
     <View style={styles.container}>
-      <TouchableOpacity
-        style={styles.mapPlaceholder}
-        activeOpacity={1}
-        onPress={() => { if (floatVisible.current) hideFloatingCard(); }}
-      >
-        <Text style={styles.mapText}>近くの投稿マップ</Text>
-        <Text style={styles.mapSubText}>MapLibre 本実装前のプレースホルダーです</Text>
-
-        <View style={styles.locationMarker}>
-          <Animated.View
-            style={[styles.locationPing, { transform: [{ scale: pingScale }], opacity: pingOpacity }]}
-          />
-          <View style={styles.locationDot}>
-            <Ionicons name="navigate" size={14} color="#fff" />
-          </View>
-        </View>
-
-        {sorted.slice(0, PIN_POSITIONS.length).map((post, i) => {
-          const cat = getCategoryInfo(post.category);
-          const iconName = getCategoryIconName(post.category) as keyof typeof Ionicons.glyphMap;
-          const pos = PIN_POSITIONS[i];
-          const isSelected = selectedPost?.id === post.id;
-
-          return (
-            <TouchableOpacity
-              key={post.id}
-              style={[styles.pin, { top: pos.top, left: pos.left }]}
-              onPress={() => showFloatingCard(post)}
-              activeOpacity={0.85}
-            >
-              <View style={[styles.pinCircle, { backgroundColor: cat.color }, isSelected && styles.pinCircleSelected]}>
-                <Ionicons name={iconName} size={16} color="#fff" />
-              </View>
-              {post.urgency === 'high' ? (
-                <View style={styles.pinUrgency}>
-                  <Text style={styles.pinUrgencyText}>!</Text>
-                </View>
-              ) : null}
-            </TouchableOpacity>
-          );
-        })}
-      </TouchableOpacity>
+      <MapView
+        posts={sorted}
+        selectedPostId={selectedPost?.id ?? null}
+        onPinPress={showFloatingCard}
+        onMapPress={() => { if (floatVisible.current) hideFloatingCard(); }}
+      />
 
       <SafeAreaView style={styles.headerContainer} edges={['top']}>
         <View style={styles.headerRow}>
@@ -386,95 +322,6 @@ function CategoryChip({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  mapPlaceholder: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#D1FAE5',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  mapText: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#065F46',
-    marginBottom: 8,
-  },
-  mapSubText: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-  },
-  locationMarker: {
-    position: 'absolute',
-    top: '50%',
-    left: '50%',
-    marginTop: -16,
-    marginLeft: -16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  locationPing: {
-    position: 'absolute',
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(59, 130, 246, 0.35)',
-  },
-  locationDot: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#3B82F6',
-    borderWidth: 3,
-    borderColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#3B82F6',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.5,
-    shadowRadius: 6,
-    elevation: 6,
-  },
-  pin: {
-    position: 'absolute',
-    marginLeft: -18,
-  },
-  pinCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#fff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  pinCircleSelected: {
-    borderWidth: 3,
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  pinUrgency: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: '#EF4444',
-    borderWidth: 2,
-    borderColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pinUrgencyText: {
-    fontSize: 8,
-    color: '#fff',
-    fontWeight: '700',
   },
   headerContainer: {
     position: 'absolute',

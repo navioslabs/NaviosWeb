@@ -63,7 +63,7 @@ Shadow:    sm / md / lg プリセット
 - **画面コンポーネント内のサブコンポーネント**は同ファイル内に定義してよい（`function StatItem()`等）
 - **`Alert.alert` は操作系エラーのみ**使用。バリデーションはインラインエラー表示を優先
 - **画像アップロード時は `optimizeImage()` を必ず使う**（投稿: 800px / アバター: 400px / quality: 0.7）
-- **モックデータの再導入禁止** — `lib/mockData.ts` は参照用として残すが import しない
+- **モックデータの再導入禁止** — mockData.ts は削除済み
 - **コメントは「なぜ」だけ書く**。「何をしているか」はコードで表現する
 - **不要な import / 変数は即削除**。`_` prefix で残さない
 
@@ -121,7 +121,6 @@ components/
 │   ├── CategoryBadge.tsx    # カテゴリラベル
 │   ├── CategoryFilter.tsx   # 横スクロールフィルターチップ
 │   ├── SkeletonLoader.tsx   # パルスアニメーション + プリセット
-│   └── BottomTabBar.tsx     # ⚠ 未使用（レガシー）
 └── post/
     ├── PostCard.tsx          # ホットカード (レスポンシブ幅)
     ├── PostListItem.tsx      # リスト行
@@ -156,6 +155,8 @@ components/
 ```
 EXPO_PUBLIC_SUPABASE_URL
 EXPO_PUBLIC_SUPABASE_ANON_KEY
+EXPO_PUBLIC_MAPTILER_API_KEY        # MapTiler（地図表示）
+EXPO_PUBLIC_GOOGLE_PLACES_API_KEY   # Google Places（場所検索）
 ```
 
 ---
@@ -179,15 +180,15 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY
 - [x] デザイントークン統一
 
 ### 次の優先事項 (P2)
-1. **MapLibre 統合** — プレースホルダーを実地図に置き換え
-2. **実機回帰テスト** — 全画面の動作確認
-3. **コメント楽観更新** — 送信後の即時反映改善
+1. **MapTiler地図表示** — MapView.tsx をMapTilerベースに実装
+2. **Google Places検索** — 投稿作成時の場所オートコンプリート
+3. **実機回帰テスト** — 全画面の動作確認
+4. **コメント楽観更新** — 送信後の即時反映改善
+5. **create.tsx 分割** — 1,406行→ステップごとにサブコンポーネント化
 
 ### 既知の課題
-- `lib/mockData.ts` — 未使用だが残存。削除可
-- `components/common/BottomTabBar.tsx` — 未使用（Expo Router に統合済み）
 - `app/post/create.tsx` — 1,406行。将来的にステップごとのコンポーネント分割を検討
-- MapLibre 未統合のため Nearby のピンはダミー座標
+- 地図はMapTiler（表示）+ Google Places（検索）で実装予定。現在のreact-native-maps実装は置き換え対象
 
 ---
 

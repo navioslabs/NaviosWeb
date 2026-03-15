@@ -5,7 +5,7 @@
 ## まず読む順番
 
 1. **`CLAUDE.md`**（リポジトリルート）— コード規約・アーキテクチャ・全体仕様
-2. `docs/03_handoff/02_session-handoff-2026-03-15.md` — 最新の引き継ぎ（全21項目）
+2. `docs/03_handoff/03_session-handoff-2026-03-15-final.md` — 最新の引き継ぎ
 3. `docs/02_current/02_implementation-summary-2026-03-15.md` — 実装状況一覧
 4. `docs/02_current/03_roadmap-refresh-2026-03-15.md` — ロードマップ
 5. 必要に応じて `docs/01_spec/01_Navios-MVP-Phase1.md` — 仕様原典
@@ -21,7 +21,8 @@
 - `04_ui-data-delivery-2026-03-14.md` — UI/データ移行記録
 
 ## 03_handoff（引き継ぎ）
-- **`02_session-handoff-2026-03-15.md`** — 最新引き継ぎ（まずこれを読む）
+- **`03_session-handoff-2026-03-15-final.md`** — 最新引き継ぎ（まずこれを読む）
+- `02_session-handoff-2026-03-15.md` — 中間版
 - `01_session-handoff-2026-03-14.md` — 前回版
 
 ## 04_history（履歴）

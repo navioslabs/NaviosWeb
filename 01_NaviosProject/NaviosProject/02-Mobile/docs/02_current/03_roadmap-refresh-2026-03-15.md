@@ -27,10 +27,10 @@
 - [x] Haptic feedback (like, comment, share)
 
 ## P2 — Next Priority
-1. **MapLibre integration** ← 最優先
-2. Runtime regression on real device
-3. Comments optimistic update
-4. Cleanup: remove mockData.ts, BottomTabBar.tsx
+1. **MapTiler地図表示** — MapView.tsx をMapTiler（ベクタータイル）ベースに実装 ← 最優先
+2. **Google Places検索** — 投稿作成時の場所オートコンプリート
+3. Runtime regression on real device
+4. Comments optimistic update
 5. Split create.tsx into sub-components (currently 1,406 lines)
 
 ## Dependencies
