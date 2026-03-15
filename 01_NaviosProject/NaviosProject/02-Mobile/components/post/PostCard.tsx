@@ -6,6 +6,7 @@ import { getCategoryInfo, getCategoryIconName } from '../../constants/categories
 import { formatDistance, getExpiryLabel } from '../../lib/utils';
 import { Colors } from '../../constants/colors';
 import { Spacing, Radius, FontSize, FontWeight } from '../../constants/design';
+import UserAvatar from '../common/UserAvatar';
 
 export const CARD_WIDTH = Math.floor(Dimensions.get('window').width * 0.42);
 
@@ -33,6 +34,8 @@ export default function PostCard({ post, isSelected, onPress }: Props) {
         {post.urgency === 'high' ? <Text style={styles.urgencyBadge}>急ぎ</Text> : null}
         {post.isEnded ? <Text style={styles.endedBadge}>終了</Text> : null}
         {post.author.verified ? <Ionicons name="checkmark-circle" size={14} color={Colors.blue} /> : null}
+        <View style={styles.headerSpacer} />
+        <UserAvatar avatar={post.author.avatar} size={20} />
       </View>
 
       <Text style={styles.title} numberOfLines={2} ellipsizeMode="tail">{post.title}</Text>
@@ -86,6 +89,9 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  headerSpacer: {
+    flex: 1,
   },
   urgencyBadge: {
     fontSize: 10,

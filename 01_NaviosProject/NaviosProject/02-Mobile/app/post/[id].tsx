@@ -38,7 +38,7 @@ import {
 } from '../../lib/postService';
 
 const PAGE_SIZE = 5;
-const CHAT_RADIUS_METERS = 500;
+const CHAT_RADIUS_METERS = 150;
 
 function getDistanceFromCoords(
   lat1: number, lon1: number,

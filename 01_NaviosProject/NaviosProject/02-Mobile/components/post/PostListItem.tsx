@@ -6,6 +6,7 @@ import { getCategoryInfo, getCategoryIconName } from '../../constants/categories
 import { formatDistance, getExpiryLabel } from '../../lib/utils';
 import { Colors } from '../../constants/colors';
 import { FontSize, FontWeight, Spacing, Radius } from '../../constants/design';
+import UserAvatar from '../common/UserAvatar';
 
 type Props = {
   post: Post;
@@ -43,6 +44,7 @@ export default function PostListItem({ post, onPress, showMatchScore }: Props) {
         <View style={styles.meta}>
           <Text style={[styles.distance, { color: cat.color }]}>{formatDistance(post.distance)}</Text>
           <Text style={styles.dot}>・</Text>
+          <UserAvatar avatar={post.author.avatar} size={16} />
           <Text style={styles.metaText}>{post.author.displayName}</Text>
           <Text style={styles.dot}>・</Text>
           <Text style={styles.metaText}>{post.createdAt}</Text>
