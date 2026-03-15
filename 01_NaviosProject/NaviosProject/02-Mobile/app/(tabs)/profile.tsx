@@ -526,7 +526,7 @@ export default function ProfileScreen() {
       {/* Floating post button */}
       <TouchableOpacity
         style={styles.fab}
-        onPress={() => router.push('/post/create')}
+        onPress={() => router.push('/post/create' as any)}
         activeOpacity={0.85}
       >
         <Ionicons name="add" size={28} color="#fff" />

@@ -242,13 +242,13 @@ function TimePickerModal({
 export default function CreatePostScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { coords, error: locationError } = useLocation();
 
-  // 未ログインなら投稿作成不可 → ログインへ
+  // セッション確認完了後に未ログインならログインへ
   useEffect(() => {
-    if (!user) router.replace('/auth/login');
-  }, [user, router]);
+    if (!authLoading && !user) router.replace('/auth/login');
+  }, [authLoading, user, router]);
 
   const [form, setForm] = useState<PostFormData>(INITIAL_FORM);
   const [submitting, setSubmitting] = useState(false);

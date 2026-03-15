@@ -51,6 +51,15 @@ CREATE TABLE public.post_images (
   CONSTRAINT post_images_pkey PRIMARY KEY (id),
   CONSTRAINT post_images_post_id_fkey FOREIGN KEY (post_id) REFERENCES public.posts(id)
 );
+CREATE TABLE public.post_likes (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  post_id uuid,
+  user_id uuid,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT post_likes_pkey PRIMARY KEY (id),
+  CONSTRAINT post_likes_post_id_fkey FOREIGN KEY (post_id) REFERENCES public.posts(id),
+  CONSTRAINT post_likes_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id)
+);
 CREATE TABLE public.posts (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
   author_id uuid NOT NULL,
@@ -87,4 +96,37 @@ CREATE TABLE public.users (
   updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT users_pkey PRIMARY KEY (id),
   CONSTRAINT users_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.whisper_reactions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  whisper_id uuid NOT NULL,
+  user_id uuid NOT NULL,
+  reaction_type text NOT NULL CHECK (reaction_type = ANY (ARRAY['thanks'::text, 'useful'::text, 'wantToGo'::text, 'funny'::text, 'agree'::text])),
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT whisper_reactions_pkey PRIMARY KEY (id),
+  CONSTRAINT whisper_reactions_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT whisper_reactions_whisper_id_fkey FOREIGN KEY (whisper_id) REFERENCES public.whispers(id)
+);
+CREATE TABLE public.whisper_replies (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  whisper_id uuid NOT NULL,
+  user_id uuid NOT NULL,
+  content text NOT NULL CHECK (char_length(content) >= 1 AND char_length(content) <= 500),
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT whisper_replies_pkey PRIMARY KEY (id),
+  CONSTRAINT whisper_replies_whisper_id_fkey FOREIGN KEY (whisper_id) REFERENCES public.whispers(id),
+  CONSTRAINT whisper_replies_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.whispers (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  content text NOT NULL CHECK (char_length(content) >= 1 AND char_length(content) <= 500),
+  latitude double precision NOT NULL,
+  longitude double precision NOT NULL,
+  area_name text NOT NULL DEFAULT ''::text,
+  location USER-DEFINED,
+  created_at timestamp with time zone DEFAULT now(),
+  expires_at timestamp with time zone DEFAULT (now() + '24:00:00'::interval),
+  CONSTRAINT whispers_pkey PRIMARY KEY (id),
+  CONSTRAINT whispers_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );

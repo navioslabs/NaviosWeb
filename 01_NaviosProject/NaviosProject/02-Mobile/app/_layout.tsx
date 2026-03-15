@@ -41,7 +41,7 @@ function RootLayoutNav() {
       <Stack>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="post/[id]" options={{ headerShown: false, animation: 'slide_from_right' }} />
-        <Stack.Screen name="post/create" options={{ headerShown: false, presentation: 'modal' }} />
+        <Stack.Screen name="post/create" options={{ headerShown: false, animation: 'slide_from_bottom' }} />
         <Stack.Screen name="post/success" options={{ headerShown: false, animation: 'fade_from_bottom' }} />
         <Stack.Screen name="auth/login" options={{ headerShown: false }} />
         <Stack.Screen name="auth/register" options={{ headerShown: false }} />
