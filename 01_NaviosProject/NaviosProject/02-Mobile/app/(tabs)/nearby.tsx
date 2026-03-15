@@ -167,7 +167,7 @@ export default function NearbyScreen() {
         </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryContainer}>
-          <CategoryChip label="すべて" active={activeCategory === 'all'} color="#475569" onPress={() => setActiveCategory('all')} />
+          <CategoryChip label="すべて" active={activeCategory === 'all'} color={Colors.slate} onPress={() => setActiveCategory('all')} />
           {CATEGORIES.map((cat) => (
             <CategoryChip
               key={cat.id}
@@ -511,9 +511,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: 8,
-    backgroundColor: '#FEF2F2',
+    backgroundColor: Colors.dangerBg,
     borderWidth: 1,
-    borderColor: '#FECACA',
+    borderColor: Colors.dangerBorder,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
@@ -521,7 +521,7 @@ const styles = StyleSheet.create({
   errorText: {
     flex: 1,
     fontSize: 12,
-    color: '#991B1B',
+    color: Colors.dangerText,
   },
   warningBox: {
     marginHorizontal: 16,
@@ -529,9 +529,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: 8,
-    backgroundColor: '#FFFBEB',
+    backgroundColor: Colors.warningBg,
     borderWidth: 1,
-    borderColor: '#FDE68A',
+    borderColor: Colors.warningBorder,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
@@ -539,7 +539,7 @@ const styles = StyleSheet.create({
   warningText: {
     flex: 1,
     fontSize: 12,
-    color: '#92400E',
+    color: Colors.warningText,
   },
   sheetContent: {
     flex: 1,
@@ -607,7 +607,7 @@ const styles = StyleSheet.create({
   },
   floatingUrgency: {
     fontSize: 10,
-    color: '#EF4444',
+    color: Colors.danger,
     fontWeight: '700',
   },
   floatingClose: {

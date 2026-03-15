@@ -48,7 +48,7 @@ export default function PostSuccessScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F0FDF4',
+    backgroundColor: Colors.successBg,
     padding: 20,
     justifyContent: 'center',
   },

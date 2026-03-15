@@ -20,10 +20,3 @@ export const getCategoryIconName = (id: string): string => {
   };
   return map[id] ?? 'ellipse-outline';
 };
-
-export const CATEGORY_ACTIONS: Record<CategoryId, { label: string; color: string }> = {
-  stock: { label: '連絡する', color: '#10B981' },
-  event: { label: '参加する', color: '#F59E0B' },
-  help: { label: '協力する', color: '#F43F5E' },
-  admin: { label: '公式サイト', color: '#8B5CF6' },
-};

@@ -160,7 +160,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceSecondary,
   },
   input: { flex: 1, fontSize: 14, color: Colors.textPrimary },
-  errorText: { fontSize: 12, color: '#EF4444', marginTop: 4, paddingHorizontal: 4 },
+  errorText: { fontSize: 12, color: Colors.danger, marginTop: 4, paddingHorizontal: 4 },
   loginButton: {
     backgroundColor: Colors.primary,
     borderRadius: 12,

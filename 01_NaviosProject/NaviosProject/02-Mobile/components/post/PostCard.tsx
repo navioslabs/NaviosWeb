@@ -5,6 +5,7 @@ import { Post } from '../../types';
 import { getCategoryInfo, getCategoryIconName } from '../../constants/categories';
 import { formatDistance, getExpiryLabel } from '../../lib/utils';
 import { Colors } from '../../constants/colors';
+import { Spacing, Radius, FontSize, FontWeight } from '../../constants/design';
 
 export const CARD_WIDTH = Math.floor(Dimensions.get('window').width * 0.42);
 
@@ -21,7 +22,7 @@ export default function PostCard({ post, isSelected, onPress }: Props) {
 
   return (
     <TouchableOpacity
-      style={[styles.card, isSelected && styles.cardSelected, { borderColor: isSelected ? cat.color : Colors.border }]}
+      style={[styles.card, isSelected && styles.cardSelected, post.isEnded && styles.cardEnded, { borderColor: isSelected ? cat.color : Colors.border }]}
       onPress={() => onPress(post)}
       activeOpacity={0.82}
     >
@@ -30,7 +31,8 @@ export default function PostCard({ post, isSelected, onPress }: Props) {
           <Ionicons name={iconName} size={13} color="#fff" />
         </View>
         {post.urgency === 'high' ? <Text style={styles.urgencyBadge}>急ぎ</Text> : null}
-        {post.author.verified ? <Ionicons name="checkmark-circle" size={14} color="#3B82F6" /> : null}
+        {post.isEnded ? <Text style={styles.endedBadge}>終了</Text> : null}
+        {post.author.verified ? <Ionicons name="checkmark-circle" size={14} color={Colors.blue} /> : null}
       </View>
 
       <Text style={styles.title} numberOfLines={2} ellipsizeMode="tail">{post.title}</Text>
@@ -62,7 +64,7 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 12,
     borderWidth: 2,
-    backgroundColor: '#fff',
+    backgroundColor: Colors.surface,
     justifyContent: 'space-between',
   },
   cardSelected: {
@@ -87,7 +89,7 @@ const styles = StyleSheet.create({
   },
   urgencyBadge: {
     fontSize: 10,
-    color: '#EF4444',
+    color: Colors.danger,
     fontWeight: '700',
   },
   title: {
@@ -137,5 +139,18 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '600',
     flex: 1,
+  },
+  cardEnded: {
+    opacity: 0.6,
+  },
+  endedBadge: {
+    fontSize: FontSize.xs,
+    fontWeight: FontWeight.bold,
+    color: Colors.surface,
+    backgroundColor: Colors.textMuted,
+    paddingHorizontal: Spacing.xs,
+    paddingVertical: 1,
+    borderRadius: Radius.sm,
+    overflow: 'hidden',
   },
 });

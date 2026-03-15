@@ -23,9 +23,9 @@ import UserAvatar from '../../components/common/UserAvatar';
 import CategoryBadge from '../../components/common/CategoryBadge';
 import CommentItem from '../../components/post/CommentItem';
 import { formatDistance, getWalkTime } from '../../lib/utils';
-import { CATEGORY_ACTIONS } from '../../constants/categories';
 import { Colors } from '../../constants/colors';
 import { useAuth } from '../../hooks/useAuth';
+import { useLocation } from '../../hooks/useLocation';
 import type { Comment, Post } from '../../types';
 import {
   createComment,
@@ -38,12 +38,28 @@ import {
 } from '../../lib/postService';
 
 const PAGE_SIZE = 5;
+const CHAT_RADIUS_METERS = 500;
+
+function getDistanceFromCoords(
+  lat1: number, lon1: number,
+  lat2: number, lon2: number,
+): number {
+  const R = 6371000;
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 
 export default function DetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id?: string | string[] }>();
   const postId = Array.isArray(id) ? id[0] : id;
   const { user } = useAuth();
+  const { coords: userCoords } = useLocation();
 
   const [post, setPost] = useState<Post | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
@@ -185,13 +201,6 @@ export default function DetailScreen() {
     }).catch(() => {});
   };
 
-  const handleActionPress = () => {
-    if (!post) return;
-    if (post.category === 'stock' && post.author.phone) {
-      Linking.openURL(`tel:${post.author.phone}`).catch(() => {});
-    }
-  };
-
   const handleSendComment = async () => {
     if (!post || !postId) return;
     if (!post.allowComments) return;
@@ -287,6 +296,16 @@ export default function DetailScreen() {
 
   const isOwnPost = post && user && post.author.id === user.id;
 
+  const distanceToPost = post && userCoords
+    ? getDistanceFromCoords(
+        userCoords.latitude, userCoords.longitude,
+        post.place.latitude, post.place.longitude,
+      )
+    : null;
+
+  const isChatEnabled = isOwnPost || (distanceToPost !== null && distanceToPost <= CHAT_RADIUS_METERS);
+  const remainingDistance = distanceToPost !== null ? Math.max(0, Math.round(distanceToPost - CHAT_RADIUS_METERS)) : null;
+
   if (loading) {
     return (
       <SafeAreaView style={styles.centerContainer}>
@@ -307,8 +326,6 @@ export default function DetailScreen() {
       </SafeAreaView>
     );
   }
-
-  const action = CATEGORY_ACTIONS[post.category];
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -338,6 +355,12 @@ export default function DetailScreen() {
         {post.images.length > 0 ? <Image source={{ uri: post.images[0] }} style={styles.image} /> : null}
 
         <View style={styles.body}>
+          {post.isEnded ? (
+            <View style={styles.endedBanner}>
+              <Ionicons name="archive-outline" size={16} color={Colors.textSecondary} />
+              <Text style={styles.endedBannerText}>この投稿は終了しました</Text>
+            </View>
+          ) : null}
           <Text style={styles.postTitle}>{post.title}</Text>
           <View style={styles.authorRow}>
             <UserAvatar avatar={post.author.avatar} size={32} />
@@ -361,12 +384,12 @@ export default function DetailScreen() {
             >
               <Animated.View style={{ transform: [{ scale: likeScale }] }}>
                 {likingInProgress ? (
-                  <ActivityIndicator size="small" color={liked ? '#F43F5E' : Colors.textSecondary} />
+                  <ActivityIndicator size="small" color={liked ? Colors.heart : Colors.textSecondary} />
                 ) : (
                   <Ionicons
                     name={liked ? 'heart' : 'heart-outline'}
                     size={20}
-                    color={liked ? '#F43F5E' : Colors.textSecondary}
+                    color={liked ? Colors.heart : Colors.textSecondary}
                   />
                 )}
               </Animated.View>
@@ -423,43 +446,46 @@ export default function DetailScreen() {
       </ScrollView>
 
       <View style={styles.footer}>
-        <View style={styles.commentInputRow}>
-          <TextInput
-            style={styles.commentInput}
-            value={commentText}
-            onChangeText={setCommentText}
-            placeholder={post.allowComments ? 'コメントを入力...' : 'コメントは無効です'}
-            placeholderTextColor={Colors.textMuted}
-            editable={post.allowComments && !submittingComment}
-          />
-          <TouchableOpacity
-            style={[
-              styles.sendButton,
-              (!post.allowComments || submittingComment || !commentText.trim()) && styles.sendButtonDisabled,
-            ]}
-            onPress={handleSendComment}
-            disabled={!post.allowComments || submittingComment || !commentText.trim()}
-          >
-            {submittingComment ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Ionicons name="send" size={16} color="#fff" />
-            )}
-          </TouchableOpacity>
-        </View>
+        {isChatEnabled ? (
+          <View style={styles.commentInputRow}>
+            <TextInput
+              style={styles.commentInput}
+              value={commentText}
+              onChangeText={setCommentText}
+              placeholder={post.allowComments ? 'コメントを入力...' : 'コメントは無効です'}
+              placeholderTextColor={Colors.textMuted}
+              editable={post.allowComments && !submittingComment}
+            />
+            <TouchableOpacity
+              style={[
+                styles.sendButton,
+                (!post.allowComments || submittingComment || !commentText.trim()) && styles.sendButtonDisabled,
+              ]}
+              onPress={handleSendComment}
+              disabled={!post.allowComments || submittingComment || !commentText.trim()}
+            >
+              {submittingComment ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Ionicons name="send" size={16} color="#fff" />
+              )}
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.chatLockedRow}>
+            <Ionicons name="lock-closed-outline" size={16} color={Colors.textMuted} />
+            <Text style={styles.chatLockedText}>
+              {remainingDistance !== null
+                ? `あと${formatDistance(remainingDistance)}でチャット可能`
+                : '現在地を取得中...'}
+            </Text>
+          </View>
+        )}
 
-        <View style={styles.actionRow}>
-          <TouchableOpacity style={styles.navButton} onPress={handleNavigate}>
-            <Ionicons name="navigate-outline" size={16} color={Colors.textPrimary} />
-            <Text style={styles.navButtonText}>ここへ行く</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.actionButton, { backgroundColor: action.color }]}
-            onPress={handleActionPress}
-          >
-            <Text style={styles.actionButtonText}>{action.label}</Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity style={styles.navButton} onPress={handleNavigate}>
+          <Ionicons name="navigate-outline" size={16} color={Colors.primary} />
+          <Text style={styles.navButtonText}>ここへ行く</Text>
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
@@ -529,14 +555,14 @@ function InlineCategoryDetails({ post }: { post: Post }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
+  container: { flex: 1, backgroundColor: Colors.surface },
   centerContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
     padding: 20,
-    backgroundColor: '#fff',
+    backgroundColor: Colors.surface,
   },
   centerText: { fontSize: 14, color: Colors.textSecondary, textAlign: 'center' },
   backButton: {
@@ -577,7 +603,7 @@ const styles = StyleSheet.create({
   placeIconBox: {
     width: 40,
     height: 40,
-    backgroundColor: '#fff',
+    backgroundColor: Colors.surface,
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
@@ -622,9 +648,7 @@ const styles = StyleSheet.create({
   sendButtonDisabled: {
     opacity: 0.6,
   },
-  actionRow: { flexDirection: 'row', gap: 10 },
   navButton: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -634,8 +658,20 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   navButtonText: { fontSize: 14, fontWeight: '700', color: Colors.textPrimary },
-  actionButton: { flex: 1, padding: 12, borderRadius: 12, alignItems: 'center' },
-  actionButtonText: { fontSize: 14, fontWeight: '700', color: '#fff' },
+  chatLockedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    padding: 12,
+    backgroundColor: Colors.surfaceSecondary,
+    borderRadius: 12,
+  },
+  chatLockedText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textMuted,
+  },
   engagementRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -662,7 +698,7 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
   },
   engagementCountLiked: {
-    color: '#F43F5E',
+    color: Colors.heart,
   },
   engagementLabel: {
     fontSize: 12,
@@ -697,5 +733,20 @@ const styles = StyleSheet.create({
   inlineReqItem: {
     fontSize: 12,
     color: Colors.textPrimary,
+  },
+  endedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: Colors.surfaceSecondary,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  endedBannerText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textSecondary,
   },
 });

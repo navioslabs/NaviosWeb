@@ -5,6 +5,7 @@ import { Post } from '../../types';
 import { getCategoryInfo, getCategoryIconName } from '../../constants/categories';
 import { formatDistance, getExpiryLabel } from '../../lib/utils';
 import { Colors } from '../../constants/colors';
+import { FontSize, FontWeight, Spacing, Radius } from '../../constants/design';
 
 type Props = {
   post: Post;
@@ -17,7 +18,7 @@ export default function PostListItem({ post, onPress, showMatchScore }: Props) {
   const expiryLabel = getExpiryLabel(post);
 
   return (
-    <TouchableOpacity style={styles.container} onPress={() => onPress(post)} activeOpacity={0.7}>
+    <TouchableOpacity style={[styles.container, post.isEnded && styles.containerEnded]} onPress={() => onPress(post)} activeOpacity={0.7}>
       <View style={[styles.iconBox, { backgroundColor: cat.color }]}>
         <Ionicons name={getCategoryIconName(post.category) as keyof typeof Ionicons.glyphMap} size={20} color="#fff" />
       </View>
@@ -25,6 +26,11 @@ export default function PostListItem({ post, onPress, showMatchScore }: Props) {
       <View style={styles.body}>
         <View style={styles.titleRow}>
           <Text style={styles.title} numberOfLines={1}>{post.title}</Text>
+          {post.isEnded ? (
+            <View style={styles.endedBadge}>
+              <Text style={styles.endedBadgeText}>終了</Text>
+            </View>
+          ) : null}
           {showMatchScore !== undefined ? (
             <View style={styles.scoreBadge}>
               <Text style={styles.scoreText}>{showMatchScore}%</Text>
@@ -93,7 +99,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   scoreBadge: {
-    backgroundColor: '#EDE9FE',
+    backgroundColor: Colors.purpleBadge,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 10,
@@ -101,7 +107,7 @@ const styles = StyleSheet.create({
   scoreText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#7C3AED',
+    color: Colors.purpleDark,
   },
   meta: {
     flexDirection: 'row',
@@ -121,5 +127,19 @@ const styles = StyleSheet.create({
   metaText: {
     fontSize: 11,
     color: Colors.textSecondary,
+  },
+  containerEnded: {
+    opacity: 0.6,
+  },
+  endedBadge: {
+    backgroundColor: Colors.textMuted,
+    paddingHorizontal: Spacing.xs,
+    paddingVertical: 1,
+    borderRadius: Radius.sm,
+  },
+  endedBadgeText: {
+    fontSize: FontSize.xs,
+    fontWeight: FontWeight.bold,
+    color: Colors.surface,
   },
 });

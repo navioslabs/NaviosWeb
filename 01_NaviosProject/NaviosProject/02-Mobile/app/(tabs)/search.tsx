@@ -71,7 +71,7 @@ export default function TimelineScreen() {
         key: 'hot',
         title: '今盛り上がっている投稿',
         icon: 'flame' as keyof typeof Ionicons.glyphMap,
-        color: '#F59E0B',
+        color: Colors.warning,
         count: hotPosts.length,
         data: hotPosts,
       }];
@@ -88,7 +88,7 @@ export default function TimelineScreen() {
       key: 'ended',
       title: '過去に盛り上がった投稿',
       icon: 'trophy-outline' as keyof typeof Ionicons.glyphMap,
-      color: '#8B5CF6',
+      color: Colors.purple,
       count: endedPosts.length,
       data: endedPosts,
     }];
@@ -171,7 +171,7 @@ export default function TimelineScreen() {
               <Ionicons
                 name={tab.icon}
                 size={16}
-                color={isActive ? '#E97316' : Colors.textMuted}
+                color={isActive ? Colors.orange : Colors.textMuted}
               />
               <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]}>
                 {tab.label}
@@ -224,14 +224,14 @@ export default function TimelineScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFBF5' },
+  container: { flex: 1, backgroundColor: Colors.orangeWarm },
   header: {
-    backgroundColor: '#FFF7ED',
+    backgroundColor: Colors.orangeLight,
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#FED7AA',
+    borderBottomColor: Colors.orangeBorder,
     gap: 10,
   },
   headerTop: {
@@ -246,12 +246,12 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 8,
-    backgroundColor: '#E97316',
+    backgroundColor: Colors.orange,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  title: { fontSize: 20, fontWeight: '800', color: '#7C2D12' },
-  headerSub: { fontSize: 11, color: '#C2410C', marginLeft: 38 },
+  title: { fontSize: 20, fontWeight: '800', color: Colors.orangeDark },
+  headerSub: { fontSize: 11, color: Colors.orangeText, marginLeft: 38 },
   statsRow: {
     gap: 8,
     paddingVertical: 2,
@@ -265,7 +265,7 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#FDBA74',
+    borderColor: Colors.orangeBorder,
   },
   statDot: {
     width: 6,
@@ -294,7 +294,7 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
   },
   tabLabelActive: {
-    color: '#E97316',
+    color: Colors.orange,
     fontWeight: '700',
   },
   tabIndicator: {
@@ -304,7 +304,7 @@ const styles = StyleSheet.create({
     right: '20%',
     height: 2.5,
     borderRadius: 2,
-    backgroundColor: '#E97316',
+    backgroundColor: Colors.orange,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -327,17 +327,17 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   sectionBadge: {
-    backgroundColor: '#FFF7ED',
+    backgroundColor: Colors.orangeLight,
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#FDBA74',
+    borderColor: Colors.orangeBorder,
   },
   sectionBadgeText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#E97316',
+    color: Colors.orange,
   },
   listContent: {
     padding: 16,
@@ -357,9 +357,9 @@ const styles = StyleSheet.create({
     margin: 16,
     padding: 12,
     borderRadius: 10,
-    backgroundColor: '#FEF2F2',
+    backgroundColor: Colors.dangerBg,
   },
-  errorText: { flex: 1, fontSize: 13, color: '#991B1B' },
+  errorText: { flex: 1, fontSize: 13, color: Colors.dangerText },
   emptyBox: {
     alignItems: 'center',
     justifyContent: 'center',

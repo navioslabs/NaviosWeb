@@ -10,6 +10,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Animated, Platform } from 're
 import { Ionicons } from '@expo/vector-icons';
 import { Post } from '../../types';
 import { getCategoryInfo, getCategoryIconName } from '../../constants/categories';
+import { Colors } from '../../constants/colors';
 
 // react-native-maps を動的ロード — 未インストール時はフォールバック
 let RNMapView: any = null;
@@ -191,19 +192,19 @@ const styles = StyleSheet.create({
   },
   placeholder: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#D1FAE5',
+    backgroundColor: Colors.successLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
   mapText: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#065F46',
+    color: Colors.successDark,
     marginBottom: 4,
   },
   mapSubText: {
     fontSize: 12,
-    color: '#64748B',
+    color: Colors.textSecondary,
   },
   locationMarker: {
     position: 'absolute',
@@ -225,12 +226,12 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#3B82F6',
+    backgroundColor: Colors.blue,
     borderWidth: 3,
     borderColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#3B82F6',
+    shadowColor: Colors.blue,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.5,
     shadowRadius: 6,
@@ -267,7 +268,7 @@ const styles = StyleSheet.create({
     width: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: '#EF4444',
+    backgroundColor: Colors.danger,
     borderWidth: 2,
     borderColor: '#fff',
     alignItems: 'center',

@@ -51,7 +51,7 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
   },
   helpBadge: {
-    backgroundColor: '#D1FAE5',
+    backgroundColor: Colors.successLight,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
@@ -59,7 +59,7 @@ const styles = StyleSheet.create({
   helpText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#059669',
+    color: Colors.primaryDark,
   },
   time: {
     fontSize: 11,

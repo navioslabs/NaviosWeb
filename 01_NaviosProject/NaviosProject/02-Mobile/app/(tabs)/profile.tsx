@@ -8,6 +8,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,7 +25,7 @@ import { supabase } from '../../lib/supabase';
 import { optimizeImage } from '../../lib/postService';
 import type { CategoryId } from '../../constants/categories';
 
-type PostTab = 'active' | 'ended';
+type PostTab = 'active' | 'commented';
 
 type ProfileData = {
   displayName: string;
@@ -78,6 +79,9 @@ export default function ProfileScreen() {
   const [editingName, setEditingName] = useState(false);
   const [editedName, setEditedName] = useState('');
   const [savingName, setSavingName] = useState(false);
+  const [editingEmail, setEditingEmail] = useState(false);
+  const [editedEmail, setEditedEmail] = useState('');
+  const [savingEmail, setSavingEmail] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -139,8 +143,8 @@ export default function ProfileScreen() {
   }, [user]);
 
   const activePosts = useMemo(() => posts.filter((p) => p.status === 'active'), [posts]);
-  const endedPosts = useMemo(() => posts.filter((p) => p.status === 'ended'), [posts]);
-  const displayPosts = postTab === 'active' ? activePosts : endedPosts;
+  const commentedPosts = useMemo(() => posts.filter((p) => p.comments > 0), [posts]);
+  const displayPosts = postTab === 'active' ? activePosts : commentedPosts;
   const totalComments = useMemo(() => posts.reduce((sum, post) => sum + post.comments, 0), [posts]);
 
   const handlePickAvatar = async () => {
@@ -202,6 +206,31 @@ export default function ProfileScreen() {
     }
   };
 
+  const handleSaveEmail = async () => {
+    if (!user || !profile) return;
+    const trimmed = editedEmail.trim().toLowerCase();
+    if (!trimmed) return;
+    if (trimmed === profile.email) { setEditingEmail(false); return; }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmed)) {
+      Alert.alert('エラー', '有効なメールアドレスを入力してください。');
+      return;
+    }
+    setSavingEmail(true);
+    try {
+      const { error: authError } = await supabase.auth.updateUser({ email: trimmed });
+      if (authError) throw authError;
+      await supabase.from('users').update({ email: trimmed }).eq('id', user.id);
+      setProfile((prev) => (prev ? { ...prev, email: trimmed } : prev));
+      setEditingEmail(false);
+      Alert.alert('確認メールを送信しました', '新しいメールアドレスに届いた確認リンクをクリックしてください。');
+    } catch (err) {
+      Alert.alert('エラー', err instanceof Error ? err.message : 'メールアドレスの更新に失敗しました。');
+    } finally {
+      setSavingEmail(false);
+    }
+  };
+
   const handleLogout = async () => {
     if (submittingLogout) return;
     setSubmittingLogout(true);
@@ -234,12 +263,12 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Hero header */}
+        {/* Hero header with gradient */}
         <View style={styles.heroSection}>
           <View style={styles.heroBg} />
           <View style={styles.heroContent}>
             <TouchableOpacity onPress={handlePickAvatar} disabled={uploadingAvatar} style={styles.avatarWrapper} activeOpacity={0.8}>
-              <UserAvatar avatar={profile.avatar} size={80} backgroundColor="#A7F3D0" />
+              <UserAvatar avatar={profile.avatar} size={80} backgroundColor={Colors.avatarGreen} />
               <View style={styles.cameraOverlay}>
                 {uploadingAvatar ? (
                   <ActivityIndicator size={14} color="#fff" />
@@ -292,46 +321,51 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* Stats row */}
-        <View style={styles.statsBar}>
-          <StatItem icon="document-text-outline" value={posts.length} label="投稿" color="#10B981" />
-          <View style={styles.statDivider} />
-          <StatItem icon="radio-outline" value={activePosts.length} label="公開中" color="#F59E0B" />
-          <View style={styles.statDivider} />
-          <StatItem icon="chatbubble-outline" value={totalComments} label="コメント" color="#3B82F6" />
+        {/* Stats cards */}
+        <View style={styles.statsRow}>
+          <View style={styles.statCard}>
+            <View style={[styles.statIconCircle, { backgroundColor: 'rgba(16, 185, 129, 0.1)' }]}>
+              <Ionicons name="document-text" size={18} color={Colors.primary} />
+            </View>
+            <Text style={[styles.statValue, { color: Colors.primary }]}>{posts.length}</Text>
+            <Text style={styles.statLabel}>投稿</Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.statCard, postTab === 'active' && styles.statCardActive]}
+            activeOpacity={0.7}
+            onPress={() => setPostTab('active')}
+          >
+            <View style={[styles.statIconCircle, { backgroundColor: 'rgba(245, 158, 11, 0.1)' }]}>
+              <Ionicons name="radio" size={18} color={Colors.warning} />
+            </View>
+            <Text style={[styles.statValue, { color: Colors.warning }]}>{activePosts.length}</Text>
+            <Text style={styles.statLabel}>公開中</Text>
+            {postTab === 'active' ? <View style={[styles.statActiveBar, { backgroundColor: Colors.warning }]} /> : null}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.statCard, postTab === 'commented' && styles.statCardActive]}
+            activeOpacity={0.7}
+            onPress={() => setPostTab('commented')}
+          >
+            <View style={[styles.statIconCircle, { backgroundColor: 'rgba(59, 130, 246, 0.1)' }]}>
+              <Ionicons name="chatbubbles" size={18} color={Colors.blue} />
+            </View>
+            <Text style={[styles.statValue, { color: Colors.blue }]}>{totalComments}</Text>
+            <Text style={styles.statLabel}>コメント</Text>
+            {postTab === 'commented' ? <View style={[styles.statActiveBar, { backgroundColor: Colors.blue }]} /> : null}
+          </TouchableOpacity>
         </View>
 
         <View style={styles.body}>
-          {/* My posts section */}
+          {/* Posts section */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <View style={styles.sectionIconBox}>
                 <Ionicons name="list-outline" size={16} color="#fff" />
               </View>
-              <Text style={styles.sectionTitle}>自分の投稿</Text>
-            </View>
-
-            <View style={styles.tabBar}>
-              <TouchableOpacity
-                style={[styles.tabItem, postTab === 'active' && styles.tabItemActive]}
-                onPress={() => setPostTab('active')}
-              >
-                <Ionicons name="radio-outline" size={14} color={postTab === 'active' ? '#10B981' : Colors.textMuted} />
-                <Text style={[styles.tabLabel, postTab === 'active' && styles.tabLabelActive]}>
-                  公開中 ({activePosts.length})
-                </Text>
-                {postTab === 'active' ? <View style={styles.tabIndicator} /> : null}
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.tabItem, postTab === 'ended' && styles.tabItemActive]}
-                onPress={() => setPostTab('ended')}
-              >
-                <Ionicons name="archive-outline" size={14} color={postTab === 'ended' ? '#64748B' : Colors.textMuted} />
-                <Text style={[styles.tabLabel, postTab === 'ended' && styles.tabLabelEnded]}>
-                  終了済み ({endedPosts.length})
-                </Text>
-                {postTab === 'ended' ? <View style={[styles.tabIndicator, { backgroundColor: '#64748B' }]} /> : null}
-              </TouchableOpacity>
+              <Text style={styles.sectionTitle}>
+                {postTab === 'active' ? '公開中の投稿' : 'コメントがある投稿'}
+              </Text>
             </View>
 
             <View style={styles.postList}>
@@ -355,6 +389,12 @@ export default function ProfileScreen() {
                         <View style={styles.postMetaDot} />
                         <Ionicons name="chatbubble-outline" size={10} color={Colors.textMuted} />
                         <Text style={styles.postMeta}>{post.comments}</Text>
+                        {post.status === 'ended' ? (
+                          <>
+                            <View style={styles.postMetaDot} />
+                            <Text style={[styles.postMeta, { color: Colors.textMuted, fontWeight: '600' }]}>終了</Text>
+                          </>
+                        ) : null}
                       </View>
                     </View>
                     <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
@@ -363,9 +403,13 @@ export default function ProfileScreen() {
               })}
               {displayPosts.length === 0 ? (
                 <View style={styles.emptyBox}>
-                  <Ionicons name={postTab === 'ended' ? 'archive-outline' : 'document-text-outline'} size={32} color={Colors.textMuted} />
+                  <Ionicons
+                    name={postTab === 'commented' ? 'chatbubble-outline' : 'document-text-outline'}
+                    size={32}
+                    color={Colors.textMuted}
+                  />
                   <Text style={styles.emptyText}>
-                    {postTab === 'ended' ? '終了した投稿はまだありません' : '公開中の投稿はありません'}
+                    {postTab === 'commented' ? 'コメントがある投稿はありません' : '公開中の投稿はありません'}
                   </Text>
                 </View>
               ) : null}
@@ -375,18 +419,49 @@ export default function ProfileScreen() {
           {/* Account section */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <View style={[styles.sectionIconBox, { backgroundColor: '#64748B' }]}>
+              <View style={[styles.sectionIconBox, { backgroundColor: Colors.textSecondary }]}>
                 <Ionicons name="settings-outline" size={16} color="#fff" />
               </View>
               <Text style={styles.sectionTitle}>アカウント</Text>
             </View>
 
             <View style={styles.menuList}>
-              <View style={styles.menuItem}>
-                <Ionicons name="mail-outline" size={18} color={Colors.textSecondary} />
-                <Text style={styles.menuLabel}>メールアドレス</Text>
-                <Text style={styles.menuValue} numberOfLines={1}>{profile.email}</Text>
-              </View>
+              {editingEmail ? (
+                <View style={styles.menuItemEdit}>
+                  <Ionicons name="mail-outline" size={18} color={Colors.primary} />
+                  <TextInput
+                    style={styles.menuEditInput}
+                    value={editedEmail}
+                    onChangeText={setEditedEmail}
+                    autoFocus
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    returnKeyType="done"
+                    onSubmitEditing={handleSaveEmail}
+                    placeholder="新しいメールアドレス"
+                    placeholderTextColor={Colors.textMuted}
+                    editable={!savingEmail}
+                  />
+                  <TouchableOpacity onPress={handleSaveEmail} disabled={savingEmail} style={styles.menuEditBtn}>
+                    {savingEmail ? <ActivityIndicator size={14} color={Colors.primary} /> : <Ionicons name="checkmark" size={18} color={Colors.primary} />}
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => setEditingEmail(false)} style={styles.menuEditBtn}>
+                    <Ionicons name="close" size={18} color={Colors.textMuted} />
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={() => { setEditedEmail(profile.email); setEditingEmail(true); }}
+                  activeOpacity={0.6}
+                >
+                  <Ionicons name="mail-outline" size={18} color={Colors.textSecondary} />
+                  <Text style={styles.menuLabel}>メールアドレス</Text>
+                  <Text style={styles.menuValue} numberOfLines={1}>{profile.email}</Text>
+                  <Ionicons name="pencil-outline" size={14} color={Colors.textMuted} />
+                </TouchableOpacity>
+              )}
               <View style={styles.menuDivider} />
               <View style={styles.menuItem}>
                 <Ionicons name="call-outline" size={18} color={Colors.textSecondary} />
@@ -403,7 +478,7 @@ export default function ProfileScreen() {
               disabled={submittingLogout}
               activeOpacity={0.7}
             >
-              <Ionicons name="log-out-outline" size={18} color="#DC2626" />
+              <Ionicons name="log-out-outline" size={18} color={Colors.dangerDark} />
               <Text style={styles.logoutText}>{submittingLogout ? 'ログアウト中...' : 'ログアウト'}</Text>
             </TouchableOpacity>
           </View>
@@ -413,20 +488,10 @@ export default function ProfileScreen() {
   );
 }
 
-function StatItem({ icon, value, label, color }: { icon: keyof typeof Ionicons.glyphMap; value: number; label: string; color: string }) {
-  return (
-    <View style={styles.statItem}>
-      <Ionicons name={icon} size={16} color={color} />
-      <Text style={[styles.statValue, { color }]}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
-  skeletonContainer: { flex: 1, backgroundColor: '#fff', padding: 24 },
-  errorContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: '#fff', padding: 24 },
+  container: { flex: 1, backgroundColor: Colors.background },
+  skeletonContainer: { flex: 1, backgroundColor: Colors.surface, padding: 24 },
+  errorContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: Colors.surface, padding: 24 },
   errorText: { fontSize: 13, color: Colors.textSecondary, textAlign: 'center' },
 
   // Hero
@@ -440,10 +505,10 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 120,
-    backgroundColor: '#10B981',
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
+    height: 130,
+    backgroundColor: Colors.primary,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
   },
   heroContent: {
     alignItems: 'center',
@@ -465,11 +530,11 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#059669',
+    backgroundColor: Colors.primaryDark,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 3,
-    borderColor: '#fff',
+    borderColor: Colors.surface,
   },
   nameRow: {
     flexDirection: 'row',
@@ -493,7 +558,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.textPrimary,
     borderBottomWidth: 2,
-    borderBottomColor: '#10B981',
+    borderBottomColor: Colors.primary,
     paddingVertical: 4,
     textAlign: 'center',
   },
@@ -501,7 +566,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#10B981',
+    backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -509,7 +574,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: Colors.surfaceSecondary,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -522,7 +587,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    backgroundColor: '#10B981',
+    backgroundColor: Colors.primary,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 12,
@@ -530,32 +595,57 @@ const styles = StyleSheet.create({
   verifiedChipText: { fontSize: 10, fontWeight: '700', color: '#fff' },
   heroEmail: { fontSize: 12, color: Colors.textSecondary },
 
-  // Stats bar
-  statsBar: {
+  // Stats row
+  statsRow: {
     flexDirection: 'row',
-    backgroundColor: '#fff',
+    gap: 10,
     marginHorizontal: 16,
-    marginTop: -8,
-    borderRadius: 16,
-    paddingVertical: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
+    marginTop: -6,
   },
-  statItem: {
+  statCard: {
     flex: 1,
     alignItems: 'center',
-    gap: 2,
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
+    paddingVertical: 14,
+    gap: 4,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    position: 'relative',
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 6,
+      },
+      android: { elevation: 2 },
+    }),
+  },
+  statCardActive: {
+    borderColor: 'rgba(16, 185, 129, 0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+  },
+  statIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 2,
+  },
+  statActiveBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: '20%',
+    right: '20%',
+    height: 3,
+    borderTopLeftRadius: 3,
+    borderTopRightRadius: 3,
   },
   statValue: { fontSize: 20, fontWeight: '800' },
-  statLabel: { fontSize: 10, color: Colors.textSecondary, fontWeight: '500' },
-  statDivider: {
-    width: 1,
-    backgroundColor: '#E2E8F0',
-    marginVertical: 4,
-  },
+  statLabel: { fontSize: 10, color: Colors.textSecondary, fontWeight: '600' },
 
   // Body
   body: {
@@ -577,7 +667,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 8,
-    backgroundColor: '#10B981',
+    backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -587,42 +677,6 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
   },
 
-  // Tab bar
-  tabBar: {
-    flexDirection: 'row',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  tabItem: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    gap: 4,
-    position: 'relative',
-  },
-  tabItemActive: {},
-  tabLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.textMuted,
-  },
-  tabLabelActive: { color: '#10B981', fontWeight: '700' },
-  tabLabelEnded: { color: '#64748B', fontWeight: '700' },
-  tabIndicator: {
-    position: 'absolute',
-    bottom: 0,
-    left: '15%',
-    right: '15%',
-    height: 2.5,
-    borderRadius: 2,
-    backgroundColor: '#10B981',
-  },
-
   // Post list
   postList: { gap: 8 },
   postCard: {
@@ -630,7 +684,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     padding: 12,
-    backgroundColor: '#fff',
+    backgroundColor: Colors.surface,
     borderRadius: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -662,7 +716,7 @@ const styles = StyleSheet.create({
 
   // Menu list
   menuList: {
-    backgroundColor: '#fff',
+    backgroundColor: Colors.surface,
     borderRadius: 12,
     overflow: 'hidden',
   },
@@ -672,6 +726,25 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingVertical: 14,
     paddingHorizontal: 14,
+  },
+  menuItemEdit: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+  },
+  menuEditInput: {
+    flex: 1,
+    fontSize: 13,
+    color: Colors.textPrimary,
+    fontWeight: '600',
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.primary,
+    paddingVertical: 4,
+  },
+  menuEditBtn: {
+    padding: 4,
   },
   menuLabel: {
     fontSize: 13,
@@ -688,7 +761,7 @@ const styles = StyleSheet.create({
   menuValueMuted: { color: Colors.textMuted, fontWeight: '400' },
   menuDivider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: Colors.border,
     marginLeft: 42,
   },
 
@@ -699,10 +772,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
     padding: 14,
-    backgroundColor: '#FEF2F2',
+    backgroundColor: Colors.dangerBg,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#FECACA',
+    borderColor: Colors.dangerBorder,
   },
-  logoutText: { fontSize: 14, fontWeight: '600', color: '#DC2626' },
+  logoutText: { fontSize: 14, fontWeight: '600', color: Colors.dangerDark },
 });

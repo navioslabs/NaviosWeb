@@ -187,7 +187,7 @@ const styles = StyleSheet.create({
   },
   input: { flex: 1, fontSize: 14, color: Colors.textPrimary },
   passwordHint: { fontSize: 11, color: Colors.danger, marginTop: 2 },
-  errorText: { fontSize: 12, color: '#EF4444', marginTop: 4, paddingHorizontal: 4 },
+  errorText: { fontSize: 12, color: Colors.danger, marginTop: 4, paddingHorizontal: 4 },
   registerButton: {
     backgroundColor: Colors.primary,
     borderRadius: 12,

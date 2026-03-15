@@ -68,7 +68,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: Colors.surface,
     gap: 12,
   },
   loadingText: {
@@ -76,13 +76,13 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
   },
   banner: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: Colors.warningBannerBg,
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
   bannerText: {
     fontSize: 12,
-    color: '#92400E',
+    color: Colors.warningText,
     textAlign: 'center',
   },
 });
