@@ -1,0 +1,7 @@
+---
+import AppLayout from "../layouts/AppLayout.astro";
+import { SettingsPage } from "../components/app/pages/SettingsPage";
+---
+<AppLayout title="設定 - Navios">
+  <SettingsPage client:only="react" />
+</AppLayout>

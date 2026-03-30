@@ -1,0 +1,8 @@
+---
+import AppLayout from "../../layouts/AppLayout.astro";
+import { FeedDetailPage } from "../../components/app/pages/FeedDetailPage";
+const { id } = Astro.params;
+---
+<AppLayout title="投稿詳細 - Navios">
+  <FeedDetailPage id={id!} client:only="react" />
+</AppLayout>

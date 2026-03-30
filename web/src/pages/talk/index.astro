@@ -1,0 +1,7 @@
+---
+import AppLayout from "../../layouts/AppLayout.astro";
+import { TalkPage } from "../../components/app/pages/TalkPage";
+---
+<AppLayout title="トーク - Navios">
+  <TalkPage client:only="react" />
+</AppLayout>

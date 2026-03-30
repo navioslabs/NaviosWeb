@@ -1,0 +1,7 @@
+---
+import AppLayout from "../layouts/AppLayout.astro";
+import { SearchPage } from "../components/app/pages/SearchPage";
+---
+<AppLayout title="さがす - Navios">
+  <SearchPage client:only="react" />
+</AppLayout>

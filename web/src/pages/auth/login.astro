@@ -1,0 +1,7 @@
+---
+import AppLayout from "../../layouts/AppLayout.astro";
+import { LoginPage } from "../../components/app/pages/LoginPage";
+---
+<AppLayout title="ログイン - Navios">
+  <LoginPage client:only="react" />
+</AppLayout>

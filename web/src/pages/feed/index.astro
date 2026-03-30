@@ -1,0 +1,7 @@
+---
+import AppLayout from "../../layouts/AppLayout.astro";
+import { FeedPage } from "../../components/app/pages/FeedPage";
+---
+<AppLayout title="フィード - Navios">
+  <FeedPage client:only="react" />
+</AppLayout>

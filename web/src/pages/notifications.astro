@@ -1,0 +1,7 @@
+---
+import AppLayout from "../layouts/AppLayout.astro";
+import { NotificationsPage } from "../components/app/pages/NotificationsPage";
+---
+<AppLayout title="通知 - Navios">
+  <NotificationsPage client:only="react" />
+</AppLayout>

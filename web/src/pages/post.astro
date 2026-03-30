@@ -1,0 +1,8 @@
+---
+import AppLayout from "../layouts/AppLayout.astro";
+import { PostPage } from "../components/app/pages/PostPage";
+const isTalk = Astro.url.searchParams.get("type") === "talk";
+---
+<AppLayout title="投稿 - Navios">
+  <PostPage isTalk={isTalk} client:only="react" />
+</AppLayout>

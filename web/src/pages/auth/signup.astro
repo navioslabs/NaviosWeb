@@ -1,0 +1,7 @@
+---
+import AppLayout from "../../layouts/AppLayout.astro";
+import { SignupPage } from "../../components/app/pages/SignupPage";
+---
+<AppLayout title="アカウント作成 - Navios">
+  <SignupPage client:only="react" />
+</AppLayout>

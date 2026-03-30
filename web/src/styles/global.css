@@ -1,0 +1,106 @@
+@import "tailwindcss";
+
+/* ── Navios Theme Tokens (Mobile準拠) ────────── */
+:root {
+  --bg: #F6F5F1;
+  --surface: #FFFFFF;
+  --surface2: #F0EFEB;
+  --surface3: #E6E5E1;
+  --glass: rgba(255,255,255,0.82);
+  --border: rgba(0,0,0,0.06);
+  --text: #0C0C14;
+  --sub: #6E6E80;
+  --muted: #A0A0B0;
+  --accent: #00D4A1;
+  --accent-dark: #00B88A;
+  --red: #F0425C;
+  --amber: #F5A623;
+  --purple: #8B6FC0;
+  --blue: #4A9EFF;
+  --glow: rgba(0,212,161,0.18);
+}
+
+.dark {
+  --bg: #06060C;
+  --surface: #0E0E18;
+  --surface2: #161624;
+  --surface3: #1E1E30;
+  --glass: rgba(14,14,24,0.78);
+  --border: rgba(255,255,255,0.10);
+  --text: #F2F1FA;
+  --sub: #9B9AB4;
+  --muted: #5E5D78;
+  --accent: #00E8B0;
+  --accent-dark: #00B88A;
+  --red: #FF5A72;
+  --amber: #FFB840;
+  --purple: #A084D4;
+  --blue: #5EB0FF;
+  --glow: rgba(0,232,176,0.28);
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface2: var(--surface2);
+  --color-surface3: var(--surface3);
+  --color-glass: var(--glass);
+  --color-border-t: var(--border);
+  --color-text-p: var(--text);
+  --color-sub: var(--sub);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-dark: var(--accent-dark);
+  --color-red: var(--red);
+  --color-amber: var(--amber);
+  --color-purple: var(--purple);
+  --color-blue: var(--blue);
+  --color-glow: var(--glow);
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Hiragino Sans", sans-serif;
+}
+
+::selection { background-color: rgba(0,212,161,0.25); }
+
+/* ── Glass Card ──────────────────────────────── */
+.glass-card {
+  background: var(--glass);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border);
+  transition: all 0.25s ease;
+}
+.glass-card:hover {
+  border-color: var(--accent);
+  box-shadow: 0 4px 24px var(--glow);
+}
+
+/* ── Scrollbar ───────────────────────────────── */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--muted); border-radius: 3px; }
+
+/* ── Animations ──────────────────────────────── */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in { animation: fade-in 0.3s ease-out both; }
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 0 var(--glow); }
+  50% { box-shadow: 0 0 12px 4px var(--glow); }
+}
+.animate-pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }
+
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.animate-live { animation: live-pulse 1.5s ease-in-out infinite; }

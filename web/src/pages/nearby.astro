@@ -1,0 +1,7 @@
+---
+import AppLayout from "../layouts/AppLayout.astro";
+import { NearbyPage } from "../components/app/pages/NearbyPage";
+---
+<AppLayout title="ちかく - Navios">
+  <NearbyPage client:only="react" />
+</AppLayout>
